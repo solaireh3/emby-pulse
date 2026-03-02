@@ -189,7 +189,6 @@ class TelegramBot:
             ]
         }
         try: 
-            # 🔥 增加日志打印：用来排查代理是否支持 menu/create 路由
             res = requests.post(f"{proxy_url}/cgi-bin/menu/create?access_token={token}&agentid={agentid}", json=menu_data, timeout=5)
             print(f"📦 WeCom Menu Sync: {res.status_code} - {res.text}")
         except Exception as e: 
@@ -200,14 +199,12 @@ class TelegramBot:
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
         try:
-            # 🔥 强制使用 text 类型，摒弃 markdown
             clean_text = self._html_to_wecom_text(text, inline_keyboard)
             url = f"{proxy_url}/cgi-bin/message/send?access_token={token}"
             requests.post(url, json={"touser": touser, "msgtype": "text", "agentid": int(agentid), "text": {"content": clean_text}}, timeout=10)
         except Exception as e: pass
 
     def _send_wecom_photo(self, photo_bytes, html_text, inline_keyboard=None, touser="@all"):
-        # 有图片的图文卡片 (News) 是全端兼容的，保持不变
         token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
@@ -443,29 +440,42 @@ class TelegramBot:
         except: pass
         if not series_info: series_info = episodes[0]
 
-        episodes.sort(key=lambda x: (x.get('ParentIndexNumber', 1), x.get('IndexNumber', 1)))
-        season_idx = episodes[0].get('ParentIndexNumber', 1)
-        
-        ep_indices = sorted(list(set([e.get('IndexNumber', 0) for e in episodes if e.get('IndexNumber') is not None])))
+        # 🔥 按季号(ParentIndexNumber)进行二次分组，彻底解决多季丢失问题
+        season_groups = defaultdict(list)
+        for ep in episodes:
+            s_idx = ep.get('ParentIndexNumber', 1)
+            season_groups[s_idx].append(ep)
+            
+        season_strs = []
+        total_eps = 0
+        def zf(num): return str(num).zfill(2)
 
-        if len(ep_indices) > 1:
-            ranges = []
-            start = ep_indices[0]
-            end = ep_indices[0]
-            for idx in ep_indices[1:]:
-                if idx == end + 1: end = idx
-                else:
-                    ranges.append(f"E{start}" if start == end else f"E{start}-E{end}")
-                    start = idx; end = idx
-            ranges.append(f"E{start}" if start == end else f"E{start}-E{end}")
-            ep_range_str = ", ".join(ranges)
-            title_suffix = f"新增 {len(ep_indices)} 集 ({ep_range_str})"
-        elif len(ep_indices) == 1:
-            title_suffix = f"E{str(ep_indices[0]).zfill(2)}"
-            if episodes[0].get('Name') and "Episode" not in episodes[0].get('Name') and "第" not in episodes[0].get('Name'):
-                title_suffix += f" {episodes[0].get('Name')}"
-        else:
-            title_suffix = f"新增 {len(episodes)} 集"
+        for s_idx in sorted(season_groups.keys()):
+            s_eps = season_groups[s_idx]
+            ep_indices = sorted(list(set([e.get('IndexNumber', 0) for e in s_eps if e.get('IndexNumber') is not None])))
+            total_eps += len(ep_indices)
+            
+            if len(ep_indices) > 1:
+                ranges = []
+                start = ep_indices[0]; end = ep_indices[0]
+                for idx in ep_indices[1:]:
+                    if idx == end + 1: end = idx
+                    else:
+                        ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
+                        start = idx; end = idx
+                ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
+                season_strs.append(f"S{zf(s_idx)}{', '.join(ranges)}")
+            elif len(ep_indices) == 1:
+                season_strs.append(f"S{zf(s_idx)}E{zf(ep_indices[0])}")
+
+        final_ep_str = ", ".join(season_strs)
+        title_suffix = f"{final_ep_str} (共{total_eps}集)" if total_eps > 1 else final_ep_str
+        
+        # 如果只有单集且有名字，加上集名
+        if total_eps == 1 and len(episodes) == 1:
+            ep_name = episodes[0].get('Name', '')
+            if ep_name and "Episode" not in ep_name and "第" not in ep_name:
+                title_suffix += f" {ep_name}"
 
         series_name = series_info.get('Name', '未知剧集')
         year = series_info.get("ProductionYear", "")
@@ -477,21 +487,17 @@ class TelegramBot:
         if base_url.endswith('/'): base_url = base_url[:-1]
         play_url = f"{base_url}/web/index.html#!/item?id={series_id}&serverId={series_info.get('ServerId','')}"
 
-        caption = (f"📺 <b>新入库 剧集</b>\n\n"
-                   f"📌 <b>{series_name}</b> ({year})\n"
-                   f"🏷 季集：S{str(season_idx).zfill(2)} {title_suffix}\n"
-                   f"⭐ 评分：{rating} / 10\n"
+        # 🔥 优化后的标题行：高度浓缩
+        caption = (f"📺 <b>新入库 剧集 {series_name}</b> {title_suffix}\n\n"
+                   f"📌 年份：{year}  |  ⭐ 评分：{rating}\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
                    f"📝 <b>剧情简介：</b>\n{overview}")
 
         keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
-
         primary_io = self._download_emby_image(series_id, 'Primary')
         backdrop_io = self._download_emby_image(series_id, 'Backdrop') 
-        
         tg_img = primary_io or backdrop_io or REPORT_COVER_URL
         wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
-        
         self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
 
     def _push_single_item(self, item):
@@ -516,20 +522,17 @@ class TelegramBot:
         if base_url.endswith('/'): base_url = base_url[:-1]
         play_url = f"{base_url}/web/index.html#!/item?id={item['Id']}&serverId={item.get('ServerId','')}"
 
-        caption = (f"{type_icon} <b>新入库 {type_cn}</b>\n\n"
-                   f"📌 <b>{name}</b> ({year})\n"
+        # 🔥 优化后的标题行
+        caption = (f"{type_icon} <b>新入库 {type_cn} {name}</b> ({year})\n\n"
                    f"⭐ 评分：{rating} / 10\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
                    f"📝 <b>剧情简介：</b>\n{overview}")
         
         keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
-
         primary_io = self._download_emby_image(item['Id'], 'Primary')
         backdrop_io = self._download_emby_image(item['Id'], 'Backdrop')
-
         tg_img = primary_io or backdrop_io or REPORT_COVER_URL
         wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
-        
         self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
 
     def push_playback_event(self, data, action="start"):
@@ -541,18 +544,19 @@ class TelegramBot:
             
             title = item.get("Name", "未知内容")
             ep_info = ""
+            type_cn = "剧集" if item.get("Type") == "Episode" else "电影"
+            
             if item.get("SeriesName"): 
                 idx = item.get("IndexNumber", 0); parent_idx = item.get("ParentIndexNumber", 1)
-                ep_info = f"\n🏷 季集：S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} 第 {idx} 集"
+                # 🔥 直接拼接到标题后的季集信息
+                ep_info = f" S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} 第 {idx} 集"
                 title = f"{item.get('SeriesName')}"
             
-            type_cn = "剧集" if item.get("Type") == "Episode" else "电影"
             emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
             ip = session.get("RemoteEndPoint", "127.0.0.1"); loc = self._get_location(ip)
             
-            msg = (f"{emoji} <b>【{user.get('Name')}】{act}</b>\n\n"
-                   f"🎬 <b>{title}</b>{ep_info}\n"
-                   f"📚 类型：{type_cn}\n"
+            # 🔥 浓缩后的首行标题体验拉满
+            msg = (f"{emoji} <b>【{user.get('Name')}】{act} {type_cn} {title}</b>{ep_info}\n\n"
                    f"🌐 地址：{ip} ({loc})\n"
                    f"📱 设备：{session.get('Client')} on {session.get('DeviceName')}\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

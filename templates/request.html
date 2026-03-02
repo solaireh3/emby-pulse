@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>探索宇宙 - EmbyPulse</title>
+    <title>求片中心 - EmbyPulse</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
@@ -195,7 +195,11 @@
                                     <span x-show="item.status === 0" class="px-3 py-1.5 bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-full text-xs font-bold border border-slate-300 dark:border-zinc-700">审核中</span>
                                     <span x-show="item.status === 1" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-200 dark:border-blue-500/30 inline-flex items-center gap-1.5"><span class="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></span> 下载中</span>
                                     <span x-show="item.status === 2" class="px-3 py-1.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full text-xs font-bold border border-green-300 dark:border-green-500/30">✅ 已入库</span>
-                                    <span x-show="item.status === 3" class="px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-300 dark:border-red-500/30">❌ 已拒绝</span>
+                                    
+                                    <div x-show="item.status === 3" class="flex flex-col items-start gap-1.5 mt-1">
+                                        <span class="px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-300 dark:border-red-500/30">❌ 已拒绝</span>
+                                        <span x-show="item.reject_reason" class="text-xs font-medium text-red-500/80 dark:text-red-400/80 pl-2 border-l-2 border-red-300 dark:border-red-500/50">原因: <span x-text="item.reject_reason"></span></span>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -264,8 +268,8 @@
         </div>
     </div>
 
-    <div x-show="toast.show" x-transition x-cloak class="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-2xl border backdrop-blur-xl flex items-center gap-2 font-bold bg-white/90 dark:bg-zinc-800/90"
-         :class="toast.type === 'success' ? 'border-green-300 text-green-700 dark:border-green-500/30 dark:text-green-400' : 'border-red-300 text-red-700 dark:border-red-500/30 dark:text-red-400'">
+    <div x-show="toast.show" x-transition x-cloak class="fixed top-10 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-xl border backdrop-blur-xl flex items-center gap-2 font-bold bg-white/90 dark:bg-zinc-800/90"
+         :class="toast.type === 'success' ? 'border-green-300 text-green-600 dark:border-green-500/30 dark:text-green-400' : 'border-red-300 text-red-600 dark:border-red-500/30 dark:text-red-400'">
         <span x-text="toast.message"></span>
     </div>
 

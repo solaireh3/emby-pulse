@@ -11,7 +11,7 @@ from app.services.bot_service import bot
 
 router = APIRouter()
 
-# 🔥 自动为旧数据库添加 season 和 reject_reason 字段
+# 自动为数据库添加 season 和 reject_reason 字段
 def ensure_db_schema():
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
     try: c.execute("ALTER TABLE media_requests ADD COLUMN season INTEGER DEFAULT 0")
@@ -42,7 +42,7 @@ def get_emby_admin(host, key):
 class MediaRequestSubmitModel(BaseSubmitModel):
     season: int = 0
 
-# 🔥 为管理员专门定义新的 Action 模型，支持 reject_reason
+# 为管理员专门定义新的 Action 模型，支持 reject_reason
 class AdminActionModel(BaseModel):
     tmdb_id: int
     action: str
@@ -201,7 +201,7 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
             execute_sql("UPDATE media_requests SET status = 0, season = ?, reject_reason = NULL WHERE tmdb_id = ?", (data.season, data.tmdb_id))
         elif existing[0] == 2:
             conn.close(); return {"status": "error", "message": "这部片子已经入库啦！"}
-        elif existing[0] == 3: # 如果是被拒绝的，允许重新提交
+        elif existing[0] == 3: 
             execute_sql("UPDATE media_requests SET status = 0, season = ?, reject_reason = NULL WHERE tmdb_id = ?", (data.season, data.tmdb_id))
 
     success, err_msg = execute_sql("INSERT INTO request_users (tmdb_id, user_id, username) VALUES (?, ?, ?)", (data.tmdb_id, user.get("Id"), user.get("Name")))
@@ -222,13 +222,11 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
     bot.send_photo("sys_notify", data.poster_path or REPORT_COVER_URL, bot_msg, reply_markup=keyboard, platform="all")
     return {"status": "success", "message": "心愿提交成功！已通知服主处理。"}
 
-# 🔥 处理各类操作，并专门处理“拒绝”及原因
 @router.post("/api/manage/requests/action")
 def manage_request_action(data: AdminActionModel, request: Request):
     if not request.session.get("user"): return {"status": "error", "message": "权限不足"}
     new_status = 0
     
-    # 获取剧集信息用于通知
     conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; c = conn.cursor()
     c.execute("SELECT * FROM media_requests WHERE tmdb_id = ?", (data.tmdb_id,))
     row = c.fetchone(); conn.close()
@@ -244,6 +242,7 @@ def manage_request_action(data: AdminActionModel, request: Request):
                 mp_type_map = {"movie": "电影", "tv": "电视剧"}
                 payload = {"name": row["title"], "tmdbid": int(row["tmdb_id"]), "year": str(row["year"]) if row["year"] else "", "type": mp_type_map.get(row["media_type"], "未知")}
                 
+                # 🔥 安全提取季数
                 if row["media_type"] == "tv": 
                     season_val = row["season"] if "season" in row.keys() else 0
                     payload["season"] = season_val if season_val else 1
@@ -257,12 +256,14 @@ def manage_request_action(data: AdminActionModel, request: Request):
 
     elif data.action == "reject": 
         new_status = 3
-        # 发送拒绝通知
+        # 🔥 修复了 Row 的 AttributeError 报错
         t_name = row['title']
-        if row['media_type'] == 'tv' and row.get('season'): t_name += f" (第 {row['season']} 季)"
+        season_val = row["season"] if "season" in row.keys() else 0
+        if row['media_type'] == 'tv' and season_val: 
+            t_name += f" (第 {season_val} 季)"
+            
         bot_msg = f"❌ <b>求片被拒绝</b>\n\n📌 <b>片名：</b>{t_name}\n⚠️ <b>原因：</b>{data.reject_reason or '暂无说明'}"
         bot.send_message("sys_notify", bot_msg, platform="all")
-        
         execute_sql("UPDATE media_requests SET status = ?, reject_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (new_status, data.reject_reason, data.tmdb_id))
         return {"status": "success", "message": "已拒绝并反馈原因"}
 
@@ -280,7 +281,6 @@ def get_my_requests(request: Request):
     user = request.session.get("req_user")
     if not user: return {"status": "error", "message": "未登录"}
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-    # 提取 reject_reason
     query = "SELECT m.tmdb_id, m.title, m.year, m.poster_path, m.status, m.season, m.media_type, r.requested_at, m.reject_reason FROM request_users r JOIN media_requests m ON r.tmdb_id = m.tmdb_id WHERE r.user_id = ? ORDER BY r.requested_at DESC"
     c.execute(query, (user.get("Id"),)); rows = c.fetchall(); conn.close()
     
@@ -295,7 +295,6 @@ def get_my_requests(request: Request):
 def get_all_requests(request: Request):
     if not request.session.get("user"): return {"status": "error", "message": "未登录"}
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-    # 提取 reject_reason
     query = "SELECT m.tmdb_id, m.media_type, m.title, m.year, m.poster_path, m.status, m.season, m.created_at, COUNT(r.user_id) as request_count, GROUP_CONCAT(r.username, ', ') as requested_by, m.reject_reason FROM media_requests m LEFT JOIN request_users r ON m.tmdb_id = r.tmdb_id GROUP BY m.tmdb_id ORDER BY m.status ASC, request_count DESC, m.created_at DESC"
     c.execute(query); rows = c.fetchall(); conn.close()
     

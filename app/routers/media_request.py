@@ -63,14 +63,12 @@ def search_tmdb(query: str, request: Request):
             emby_exists_set = set()
 
             if tmdb_ids:
-                # 1. 查本地库状态
                 conn = sqlite3.connect(DB_PATH); c = conn.cursor()
                 placeholders = ','.join('?' * len(tmdb_ids))
                 c.execute(f"SELECT tmdb_id, status FROM media_requests WHERE tmdb_id IN ({placeholders})", tuple(tmdb_ids))
                 for row in c.fetchall(): local_status_map[str(row[0])] = row[1]
                 conn.close()
 
-                # 2. 穿透查询 Emby 媒体库
                 emby_host = cfg.get("emby_host"); emby_key = cfg.get("emby_api_key")
                 if emby_host and emby_key:
                     provider_query = ",".join([f"tmdb.{tid}" for tid in tmdb_ids])
@@ -102,13 +100,12 @@ def search_tmdb(query: str, request: Request):
         return {"status": "error", "message": "TMDB API 响应异常"}
     except Exception as e: return {"status": "error", "message": f"网络或代理错误: {str(e)}"}
 
-# ================= 🔥 提交求片 (极速异步发图) =================
+# ================= 🔥 提交求片 (修复企微无图问题) =================
 @router.post("/api/requests/submit")
 def submit_media_request(data: MediaRequestSubmitModel, request: Request):
     user = request.session.get("req_user")
     if not user: return {"status": "error", "message": "登录已过期"}
 
-    # 查重逻辑
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
     c.execute("SELECT status FROM media_requests WHERE tmdb_id = ?", (data.tmdb_id,))
     existing = c.fetchone()
@@ -136,13 +133,21 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
     admin_url = cfg.get("pulse_url") or str(request.base_url).rstrip('/')
     keyboard = {"inline_keyboard": [[{"text": "🍿 前往后台一键审批", "url": f"{admin_url}/requests_admin"}]]}
     
-    # 🔥 修复企微无图：不再阻塞下载，直接把链接扔给 bot_service 的异步多线程处理
-    photo_url = data.poster_path if data.poster_path else REPORT_COVER_URL
-    bot.send_photo("sys_notify", photo_url, bot_msg, reply_markup=keyboard, platform="all")
-    
+    # 🔥 核心修复：挂载 UA 伪装，防止 TMDB 拒绝下载！
+    photo_data = REPORT_COVER_URL
+    if data.poster_path:
+        try:
+            proxy = cfg.get("proxy_url"); proxies = {"http": proxy, "https": proxy} if proxy else None
+            # 必须加上 User-Agent，否则 TMDB 会直接切断请求导致没图
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            img_res = requests.get(data.poster_path, proxies=proxies, headers=headers, timeout=10)
+            if img_res.status_code == 200: photo_data = io.BytesIO(img_res.content)
+        except: pass
+
+    bot.send_photo("sys_notify", photo_data, bot_msg, reply_markup=keyboard, platform="all")
     return {"status": "success", "message": "心愿提交成功！已通知服主处理。"}
 
-# ================= 🔥 管理员审批 (修复 S00 问题) =================
+# ================= 🔥 管理员审批 (修复电影 S00 问题) =================
 @router.post("/api/manage/requests/action")
 def manage_request_action(data: MediaRequestActionModel, request: Request):
     if not request.session.get("user"): return {"status": "error", "message": "权限不足"}
@@ -162,18 +167,18 @@ def manage_request_action(data: MediaRequestActionModel, request: Request):
                 try:
                     clean_token = mp_token.strip().strip("'").strip('"')
                     mp_api = f"{mp_url.rstrip('/')}/api/v1/subscribe/" 
-                    
                     mp_type_map = {"movie": "电影", "tv": "电视剧"}
                     
-                    # 🔥 修复 S00：如果是电影，坚决不能带 season 字段！
+                    # 🔥 核心修复：基础 Payload 中绝对不能带有 season 字段
                     payload = {
                         "name": row["title"], 
                         "tmdbid": int(row["tmdb_id"]), 
                         "year": str(row["year"]) if row["year"] else "",
                         "type": mp_type_map.get(row["media_type"], "未知")
                     }
+                    # 只有明确是电视剧时，才加上季数
                     if row["media_type"] == "tv":
-                        payload["season"] = 1 # 只有剧集才带季数
+                        payload["season"] = 1 
                     
                     print(f"[MP DEBUG] 发送 Payload: {json.dumps(payload, ensure_ascii=False)}")
                     

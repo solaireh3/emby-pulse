@@ -58,14 +58,14 @@ class TelegramBot:
         proxy = cfg.get("proxy_url")
         return {"http": proxy, "https": proxy} if proxy else None
 
-    # 🔥 [自动入库闭环] 自动更新求片大厅状态 
+    # 🔥 自动将求片记录更新为'已入库'状态
     def _auto_finish_request(self, tmdb_id):
         if not tmdb_id: return
         try:
             tid = int(tmdb_id)
             query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND status IN (0, 1)", (tid,))
         except Exception as e:
-            logger.error(f"Auto-finish request error: {e}")
+            pass
 
     def _get_admin_id(self):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
@@ -106,7 +106,9 @@ class TelegramBot:
                 data = res.json()
                 if data.get('success'):
                     info = data.get('info', {})
-                    country, prov, city = info.get('country', ''), info.get('prov', ''), info.get('city', '')
+                    country = info.get('country', '')
+                    prov = info.get('prov', '')
+                    city = info.get('city', '')
                     if prov or city: loc = f"{country} {prov} {city}".strip()
         except: pass
         if not loc or loc == "中国  ":
@@ -123,7 +125,10 @@ class TelegramBot:
                 if res.status_code == 200:
                     d = res.json()
                     if d.get('status') == 'success':
-                        loc = f"{d.get('country', '')} {d.get('regionName', '')} {d.get('city', '')}".strip()
+                        country = d.get('country', '')
+                        region = d.get('regionName', '')
+                        city = d.get('city', '')
+                        loc = f"{country} {region} {city}".strip()
             except: pass
         if not loc: loc = "未知地区"
         else:
@@ -147,10 +152,10 @@ class TelegramBot:
         except Exception as e: pass
         return None
 
-    # ================= 🔥 企微核心洗稿引擎 (全面兼容普通微信) =================
+    # ================= 企微核心引擎 =================
     
     def _get_wecom_token(self):
-        corpid, corpsecret = cfg.get("wecom_corpid"), cfg.get("wecom_corpsecret")
+        corpid = cfg.get("wecom_corpid"); corpsecret = cfg.get("wecom_corpsecret")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not corpid or not corpsecret: return None
         if self.wecom_token and time.time() < self.wecom_token_expires:
@@ -158,7 +163,8 @@ class TelegramBot:
         try:
             res = requests.get(f"{proxy_url}/cgi-bin/gettoken?corpid={corpid}&corpsecret={corpsecret}", timeout=5).json()
             if res.get("errcode") == 0:
-                self.wecom_token, self.wecom_token_expires = res["access_token"], time.time() + res["expires_in"] - 60
+                self.wecom_token = res["access_token"]
+                self.wecom_token_expires = time.time() + res["expires_in"] - 60
                 return self.wecom_token
         except Exception as e: pass
         return None
@@ -177,7 +183,7 @@ class TelegramBot:
         return text.strip()
 
     def _set_wecom_menu(self):
-        token, agentid = self._get_wecom_token(), cfg.get("wecom_agentid")
+        token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
         menu_data = {
@@ -195,7 +201,7 @@ class TelegramBot:
         except Exception as e: pass
 
     def _send_wecom_message(self, text, inline_keyboard=None, touser="@all"):
-        token, agentid = self._get_wecom_token(), cfg.get("wecom_agentid")
+        token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
         try:
@@ -205,7 +211,7 @@ class TelegramBot:
         except Exception as e: pass
 
     def _send_wecom_photo(self, photo_bytes, html_text, inline_keyboard=None, touser="@all"):
-        token, agentid = self._get_wecom_token(), cfg.get("wecom_agentid")
+        token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
         
@@ -271,15 +277,15 @@ class TelegramBot:
         except Exception as e:
             if html_text: self._send_wecom_message(html_text, inline_keyboard, touser)
 
-    # ================= 🚀 底层双通道路由分发 (带 TMDB 封面代理增强) =================
+    # ================= 🚀 底层双通道路由 =================
 
     def send_photo(self, chat_id, photo_io, caption, parse_mode="HTML", reply_markup=None, platform="all", wecom_photo_io=None):
         photo_bytes = None
         if isinstance(photo_io, str):
             try: 
-                # 🔥 针对从 media_request.py 传过来的纯 URL 字符串，如果包含 tmdb，挂上代理
                 proxies = self._get_proxies() if ("tmdb" in photo_io.lower() or "themoviedb" in photo_io.lower()) else None
-                photo_bytes = requests.get(photo_io, proxies=proxies, timeout=10).content
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                photo_bytes = requests.get(photo_io, proxies=proxies, headers=headers, timeout=10).content
             except Exception as e: pass
         else:
             photo_io.seek(0)
@@ -290,7 +296,8 @@ class TelegramBot:
             if isinstance(wecom_photo_io, str):
                 try: 
                     proxies = self._get_proxies() if ("tmdb" in wecom_photo_io.lower() or "themoviedb" in wecom_photo_io.lower()) else None
-                    wecom_photo_bytes = requests.get(wecom_photo_io, proxies=proxies, timeout=10).content
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                    wecom_photo_bytes = requests.get(wecom_photo_io, proxies=proxies, headers=headers, timeout=10).content
                 except Exception as e: pass
             else:
                 wecom_photo_io.seek(0)
@@ -449,7 +456,6 @@ class TelegramBot:
         st_tmdb = series_info.get("ProviderIds", {}).get("Tmdb")
         if st_tmdb: self._auto_finish_request(st_tmdb)
 
-        # 按季号(ParentIndexNumber)进行二次分组，彻底解决多季丢失问题
         season_groups = defaultdict(list)
         for ep in episodes:
             s_idx = ep.get('ParentIndexNumber', 1)
@@ -480,7 +486,6 @@ class TelegramBot:
         final_ep_str = ", ".join(season_strs)
         title_suffix = f"{final_ep_str} (共{total_eps}集)" if total_eps > 1 else final_ep_str
         
-        # 如果只有单集且有名字，加上集名
         if total_eps == 1 and len(episodes) == 1:
             ep_name = episodes[0].get('Name', '')
             if ep_name and "Episode" not in ep_name and "第" not in ep_name:
@@ -496,7 +501,6 @@ class TelegramBot:
         if base_url.endswith('/'): base_url = base_url[:-1]
         play_url = f"{base_url}/web/index.html#!/item?id={series_id}&serverId={series_info.get('ServerId','')}"
 
-        # 🔥 优化后的标题行：高度浓缩
         caption = (f"📺 <b>新入库 剧集 {series_name}</b> {title_suffix}\n\n"
                    f"📌 年份：{year}  |  ⭐ 评分：{rating}\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
@@ -535,7 +539,6 @@ class TelegramBot:
         if base_url.endswith('/'): base_url = base_url[:-1]
         play_url = f"{base_url}/web/index.html#!/item?id={item['Id']}&serverId={item.get('ServerId','')}"
 
-        # 🔥 优化后的标题行
         caption = (f"{type_icon} <b>新入库 {type_cn} {name}</b> ({year})\n\n"
                    f"⭐ 评分：{rating} / 10\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"

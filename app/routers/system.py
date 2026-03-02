@@ -17,11 +17,13 @@ def api_get_settings(request: Request):
             "proxy_url": cfg.get("proxy_url"),
             "webhook_token": cfg.get("webhook_token", "embypulse"),
             "hidden_users": cfg.get("hidden_users") or [],
-            # 🔥 返回新字段
             "emby_public_url": cfg.get("emby_public_url", ""),
             "welcome_message": cfg.get("welcome_message", ""),
-            # 🔥 新增返回字段
-            "client_download_url": cfg.get("client_download_url", "")
+            "client_download_url": cfg.get("client_download_url", ""),
+            # 🔥 新增：把 MP 和面板地址吐给前端显示
+            "moviepilot_url": cfg.get("moviepilot_url", ""),
+            "moviepilot_token": cfg.get("moviepilot_token", ""),
+            "pulse_url": cfg.get("pulse_url", "")
         }
     }
 
@@ -44,11 +46,14 @@ def api_update_settings(data: SettingsModel, request: Request):
     cfg["proxy_url"] = data.proxy_url
     cfg["webhook_token"] = data.webhook_token
     cfg["hidden_users"] = data.hidden_users
-    # 🔥 保存新字段
     cfg["emby_public_url"] = data.emby_public_url
     cfg["welcome_message"] = data.welcome_message
-    # 🔥 新增保存逻辑
     cfg["client_download_url"] = data.client_download_url
+    
+    # 🔥 新增：把接收到的新字段手动存入 cfg
+    cfg["moviepilot_url"] = data.moviepilot_url
+    cfg["moviepilot_token"] = data.moviepilot_token
+    cfg["pulse_url"] = data.pulse_url
     
     save_config()
     
@@ -57,8 +62,6 @@ def api_update_settings(data: SettingsModel, request: Request):
 @router.post("/api/settings/test_tmdb")
 def api_test_tmdb(request: Request):
     if not request.session.get("user"): return {"status": "error"}
-    data = request.json() # 获取body里的 api_key 等
-    # 这里其实直接读 cfg 也可以，但前端可能发过来测试
     # 简化逻辑，直接测试 cfg 里的
     tmdb_key = cfg.get("tmdb_api_key")
     proxy = cfg.get("proxy_url")

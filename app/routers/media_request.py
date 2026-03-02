@@ -28,7 +28,7 @@ def execute_sql(query, params=()):
         conn.rollback(); return False, str(e)
     finally: conn.close()
 
-# 获取 Emby 管理员 ID (解决查重查不到的终极方案)
+# 获取 Emby 管理员 ID
 def get_emby_admin(host, key):
     if not host or not key: return None
     try:
@@ -106,7 +106,6 @@ def get_trending(request: Request):
         return {"status": "success", "data": {"movies": movies, "tv": tvs}}
     except Exception as e: return {"status": "error", "message": str(e)}
 
-# 🔥 精准查季数 (携带管理员 ID，100% 穿透查重)
 @router.get("/api/requests/tv/{tmdb_id}")
 def get_tv_details(tmdb_id: int, request: Request):
     tmdb_key = cfg.get("tmdb_api_key"); proxy = cfg.get("proxy_url"); proxies = {"http": proxy, "https": proxy} if proxy else None
@@ -231,7 +230,11 @@ def manage_request_action(data: MediaRequestActionModel, request: Request):
                     mp_api = f"{mp_url.rstrip('/')}/api/v1/subscribe/" 
                     mp_type_map = {"movie": "电影", "tv": "电视剧"}
                     payload = {"name": row["title"], "tmdbid": int(row["tmdb_id"]), "year": str(row["year"]) if row["year"] else "", "type": mp_type_map.get(row["media_type"], "未知")}
-                    if row["media_type"] == "tv": payload["season"] = row["season"] if row.get("season") else 1
+                    
+                    # 🔥 修复 get 报错：安全提取季数
+                    if row["media_type"] == "tv": 
+                        season_val = row["season"] if "season" in row.keys() else 0
+                        payload["season"] = season_val if season_val else 1
                     
                     headers = {"X-API-KEY": clean_token, "Content-Type": "application/json"}
                     res = requests.post(mp_api, json=payload, headers=headers, timeout=15)
@@ -250,7 +253,6 @@ def manage_request_action(data: MediaRequestActionModel, request: Request):
     execute_sql("UPDATE media_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (new_status, data.tmdb_id))
     return {"status": "success", "message": "审批成功"}
 
-# 🔥 核心修复：给后台传数据时，自动把季数塞进标题里！
 @router.get("/api/requests/my")
 def get_my_requests(request: Request):
     user = request.session.get("req_user")

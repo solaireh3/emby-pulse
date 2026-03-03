@@ -138,16 +138,27 @@ class RequestLoginModel(BaseModel):
 @router.post("/api/requests/auth")
 def request_system_login(data: RequestLoginModel, request: Request):
     host = cfg.get("emby_host")
-    headers = {"X-Emby-Authorization": 'MediaBrowser Client="EmbyPulse", Device="Web", Version="2.0"'}
+    if not host: return {"status": "error", "message": "未配置 Emby 服务器"}
+    
+    # 🔥 核心修复：补上 Emby 强制要求的 DeviceId="PulseRequestApp"
+    headers = {
+        "X-Emby-Authorization": 'MediaBrowser Client="EmbyPulse", Device="Web", DeviceId="PulseRequestApp", Version="2.0"'
+    }
+    
     try:
         res = requests.post(f"{host}/emby/Users/AuthenticateByName", json={"Username": data.username, "Pw": data.password}, headers=headers, timeout=8)
+        
         if res.status_code == 200:
             user_info = res.json().get("User", {})
-            # 精准挂载求片用户，不影响主后台
             request.session["req_user"] = {"Id": user_info.get("Id"), "Name": user_info.get("Name")}
             return {"status": "success"}
-        return {"status": "error", "message": "账号或密码错误"}
-    except: return {"status": "error", "message": "无法连接到 Emby 服务"}
+        else:
+            # 加入日志打印，万一再错能看到 Emby 具体的拒绝理由
+            print(f"❌ [映迹 Auth] 登录被 Emby 拒绝: 状态码 {res.status_code}, 返回值: {res.text}")
+            return {"status": "error", "message": "账号或密码错误"}
+            
+    except Exception as e: 
+        return {"status": "error", "message": f"无法连接到 Emby 服务: {str(e)}"}
 
 @router.get("/api/requests/check")
 def check_auth(request: Request):

@@ -12,7 +12,6 @@
             <div>
                 <h1 class="text-lg md:text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
                     追剧排期
-                    <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/20">Beta</span>
                 </h1>
                 <p class="hidden md:block text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">智能联动 Emby 媒体库状态</p>
             </div>
@@ -112,6 +111,7 @@ let currentOffset = 0;
 let currentServerId = ""; 
 let currentEmbyUrl = "";
 let scrollObserver = null;
+let isScrolling = false; // 🔥 核心锁：防止横向纵向滚动动画打架
 const imgBase = "https://image.tmdb.org/t/p/w500";
 
 document.addEventListener('DOMContentLoaded', () => fetchCalendar(false));
@@ -162,10 +162,14 @@ async function fetchCalendar(forceRefresh = false) {
         loadingEl.classList.add('hidden');
         gridEl.classList.remove('hidden');
 
+        // 🔥 修复自动跳转：初始化加载时自动定位到今天
         if (currentOffset === 0 && window.innerWidth < 768) {
             const todayIndex = data.days.findIndex(d => d.is_today);
             if (todayIndex !== -1) {
-                setTimeout(() => scrollToDay(todayIndex), 500); 
+                // 给图片一点点渲染时间，确保定位精准
+                setTimeout(() => {
+                    scrollToDay(todayIndex);
+                }, 300); 
             }
         }
 
@@ -176,7 +180,6 @@ async function fetchCalendar(forceRefresh = false) {
     }
 }
 
-// 🔥 核心升级：为“今天”加入实心药丸背景、红点脉冲动画，极致醒目！
 function renderMobileNav(days) {
     const navContainer = document.getElementById('mobile-day-nav');
     navContainer.innerHTML = days.map((day, index) => {
@@ -282,7 +285,8 @@ function setupScrollSpy() {
     const sections = document.querySelectorAll('.day-section');
     scrollObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
+            // 🔥 当非强制滚动锁定时，才允许触发横向滚动，避免动画打架
+            if (entry.isIntersecting && !isScrolling) {
                 const dayIndex = entry.target.id.split('-')[2];
                 highlightNavBtn(dayIndex, true); 
             }
@@ -294,10 +298,7 @@ function setupScrollSpy() {
     sections.forEach(sec => scrollObserver.observe(sec));
 }
 
-// 🔥 配合专属样式的全新高亮控制逻辑
 function highlightNavBtn(activeIndex, isAutoScroll = false) {
-    
-    // 1. 全部重置
     document.querySelectorAll('[id^="nav-btn-"]').forEach(btn => {
         btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
         btn.classList.add('border-transparent');
@@ -306,7 +307,6 @@ function highlightNavBtn(activeIndex, isAutoScroll = false) {
         const date = btn.querySelector('.nav-date');
         txt.classList.remove('scale-110');
         
-        // 只有非“今天”的标签，才恢复灰色 (今天是蓝字+实心紫底，绝不修改)
         if (!date.classList.contains('bg-indigo-500')) {
             txt.classList.remove('text-indigo-600', 'dark:text-indigo-400');
             txt.classList.add('text-gray-500', 'dark:text-gray-400');
@@ -315,7 +315,6 @@ function highlightNavBtn(activeIndex, isAutoScroll = false) {
         }
     });
 
-    // 2. 为当前选中项添加状态
     const activeBtn = document.getElementById(`nav-btn-${activeIndex}`);
     if (activeBtn) {
         activeBtn.classList.remove('border-transparent');
@@ -338,12 +337,14 @@ function highlightNavBtn(activeIndex, isAutoScroll = false) {
     }
 }
 
-// 绝对坐标滚动跳转
+// 🔥 加上滚动锁，完美解决点击不跳转的连环冲突问题
 function scrollToDay(index) {
     const section = document.getElementById(`day-section-${index}`);
     const headerContainer = document.getElementById('sticky-header-container');
     
     if (section && headerContainer) {
+        isScrolling = true; // 上锁，禁止 ScrollSpy 横向滚动干扰
+        
         const headerHeight = headerContainer.offsetHeight;
         const targetY = section.getBoundingClientRect().top + window.scrollY - headerHeight - 15;
         
@@ -353,8 +354,13 @@ function scrollToDay(index) {
         });
         
         if (window.innerWidth < 768) { 
-            highlightNavBtn(index, false); 
+            highlightNavBtn(index, false); // 仅高亮，不触发横向动画
         }
+        
+        // 等待页面滚动平滑完成后解锁 (通常需要 600-800ms)
+        setTimeout(() => {
+            isScrolling = false;
+        }, 800);
     }
 }
 
@@ -376,7 +382,7 @@ function showDetails(item) {
     
     const isReady = item.status === 'ready';
     badge.textContent = isReady ? "已入库" : item.status === 'upcoming' ? "待播出" : "待补货";
-    badge.className = `px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white ${isReady ? "bg-green-500" : item.status === 'upcoming' ? "bg-blue-500" : "bg-red-500"}`;
+    badge.className = `px-1.5 py-0.5 rounded text-[8px] md:text-[10px] font-black uppercase tracking-widest text-white ${isReady ? "bg-green-500" : item.status === 'upcoming' ? "bg-blue-500" : "bg-red-500"}`;
 
     if (isReady) {
         actions.innerHTML = `

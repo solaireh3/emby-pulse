@@ -97,6 +97,11 @@ class MediaRequestStatusUpdateModel(BaseModel):
     tmdb_id: int
     status: int  
 
-class MediaRequestActionModel(BaseModel):
+# 🔥 更新：为批量操作新增颗粒度选项参数
+class BatchActionModel(BaseModel):
+    user_ids: List[str]
     action: str  
-    tmdb_id: int
+    value: Optional[str] = None  
+    copy_library: Optional[bool] = False
+    copy_policy: Optional[bool] = False
+    copy_parental: Optional[bool] = False

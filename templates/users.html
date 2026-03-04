@@ -97,6 +97,11 @@
             <i class="fa-solid fa-calendar-plus"></i>
             <span class="hidden sm:inline">批量续期</span>
             <span class="sm:hidden">续期</span>
+        <button onclick="openBatchTemplateModal()" class="flex items-center gap-1.5 px-3 md:px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs md:text-sm font-bold transition shadow-md active:scale-95 whitespace-nowrap">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span class="hidden sm:inline">批量套用</span>
+            <span class="sm:hidden">套用</span>
+        </button>
         </button>
         <button onclick="batchAction('enable')" class="flex items-center gap-1.5 px-2.5 md:px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-xl text-xs md:text-sm font-bold transition whitespace-nowrap border border-transparent hover:border-green-200 dark:hover:border-green-800/50 active:scale-95">
             <i class="fa-solid fa-play"></i><span>启用</span>
@@ -336,7 +341,46 @@
         </div>
     </div>
 </div>
+<div id="batch-template-modal" class="fixed inset-0 z-[60] hidden items-center justify-center h-screen w-screen bg-black/50 backdrop-blur-sm px-4">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i> 批量套用模板
+        </h3>
+        <p class="text-xs text-gray-500 mb-5">将模板的策略直接覆盖到已选的 <span id="batch-template-count" class="font-bold text-purple-500 text-sm"></span> 个用户上。</p>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">选择模板来源 <span class="text-xs font-normal text-gray-400">(以此号为基准)</span></label>
+                <select id="batch-template-select" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 outline-none appearance-none cursor-pointer"></select>
+            </div>
+            
+            <div class="p-4 bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30">
+                <label class="block text-xs font-bold text-purple-800 dark:text-purple-300 mb-3 uppercase tracking-wide">请勾选需要克隆的权限模块</label>
+                <div class="flex flex-col gap-y-3 px-1">
+                    <label class="flex items-center gap-2 text-sm font-bold text-purple-700 dark:text-purple-400 cursor-pointer">
+                        <input type="checkbox" id="batch-opt-lib" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"> 
+                        媒体库访问权限 <span class="text-xs text-gray-400 font-normal ml-auto">同步可见哪些库</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm font-bold text-purple-700 dark:text-purple-400 cursor-pointer">
+                        <input type="checkbox" id="batch-opt-pol" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"> 
+                        下载与转码策略 <span class="text-xs text-gray-400 font-normal ml-auto">防炸服必备</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm font-bold text-purple-700 dark:text-purple-400 cursor-pointer">
+                        <input type="checkbox" id="batch-opt-par" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"> 
+                        家长控制分级 <span class="text-xs text-gray-400 font-normal ml-auto">同步年龄限制</span>
+                    </label>
+                </div>
+            </div>
+        </div>
 
+        <div class="flex justify-end gap-3 mt-8">
+            <button onclick="closeBatchTemplateModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm transition">取消</button>
+            <button onclick="submitBatchTemplate()" id="batch-template-btn" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow-md transition flex items-center gap-2 active:scale-95">
+                执行套用
+            </button>
+        </div>
+    </div>
+</div>
 <script>
 let users = [];
 let allLibraries = []; 
@@ -989,6 +1033,73 @@ function previewFileAvatar() {
 }
 
 function closeEditUserModal() { document.getElementById('edit-user-modal').classList.remove('flex'); document.getElementById('edit-user-modal').classList.add('hidden'); }
+// 🔥 批量套用功能逻辑
+function openBatchTemplateModal() {
+    document.getElementById('batch-template-count').innerText = selectedUsers.size;
+    populateTemplates('batch-template-select');
+    
+    // 去掉批量套用时的“默认模板”选项，因为必须选个实体账号作模板
+    const sel = document.getElementById('batch-template-select');
+    if (sel.options.length > 0 && sel.options[0].value === "") {
+        sel.remove(0); 
+    }
+    
+    const modal = document.getElementById('batch-template-modal');
+    modal.classList.remove('hidden'); 
+    setTimeout(() => modal.classList.add('flex'), 10);
+}
+
+function closeBatchTemplateModal() {
+    const modal = document.getElementById('batch-template-modal');
+    modal.classList.remove('flex'); 
+    modal.classList.add('hidden');
+}
+
+async function submitBatchTemplate() {
+    if (selectedUsers.size === 0) return;
+    const templateId = document.getElementById('batch-template-select').value;
+    if (!templateId) return alert('请先选择一个模板用户！');
+
+    const copyLib = document.getElementById('batch-opt-lib').checked;
+    const copyPol = document.getElementById('batch-opt-pol').checked;
+    const copyPar = document.getElementById('batch-opt-par').checked;
+
+    if (!copyLib && !copyPol && !copyPar) return alert('请至少勾选一项需要克隆的内容！');
+
+    const btn = document.getElementById('batch-template-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 执行中...';
+
+    const ids = Array.from(selectedUsers);
+    try {
+        const res = await fetch('/api/manage/users/batch', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                user_ids: ids, 
+                action: 'apply_template', 
+                value: templateId,
+                copy_library: copyLib,
+                copy_policy: copyPol,
+                copy_parental: copyPar
+            })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+            closeBatchTemplateModal(); 
+            selectedUsers.clear(); 
+            loadUsers();
+            alert(`🎉 完美！成功将模板权限同步给 ${ids.length} 个用户！`);
+        } else {
+            alert('套用失败: ' + json.message);
+        }
+    } catch(e) { 
+        alert('网络错误'); 
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '执行套用';
+    }
+}
+
 </script>
 
 <style>

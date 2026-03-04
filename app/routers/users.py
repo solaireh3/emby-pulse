@@ -293,6 +293,15 @@ def api_manage_users_batch(data: BatchActionModel, request: Request):
     key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
     
     try:
+        # 🔥 如果是套用模板操作，先获取一次模板用户的完整 Policy
+        src_policy = {}
+        if data.action == "apply_template" and data.value:
+            src_res = requests.get(f"{host}/emby/Users/{data.value}?api_key={key}", timeout=5)
+            if src_res.status_code == 200:
+                src_policy = src_res.json().get('Policy', {})
+            else:
+                return {"status": "error", "message": "无法获取模板用户的配置"}
+
         for uid in data.user_ids:
             if data.action == "delete":
                 requests.delete(f"{host}/emby/Users/{uid}?api_key={key}")
@@ -325,7 +334,33 @@ def api_manage_users_batch(data: BatchActionModel, request: Request):
                 exist = query_db("SELECT 1 FROM users_meta WHERE user_id = ?", (uid,), one=True)
                 if exist: query_db("UPDATE users_meta SET expire_date = ? WHERE user_id = ?", (new_date, uid))
                 else: query_db("INSERT INTO users_meta (user_id, expire_date, created_at) VALUES (?, ?, ?)", (uid, new_date, datetime.datetime.now().isoformat()))
+            
+            # 🔥 新增：执行模板数据融合
+            elif data.action == "apply_template":
+                p_res = requests.get(f"{host}/emby/Users/{uid}?api_key={key}", timeout=5)
+                if p_res.status_code == 200:
+                    p = p_res.json().get('Policy', {})
                     
+                    if data.copy_library:
+                        p['EnableAllFolders'] = src_policy.get('EnableAllFolders', True)
+                        p['EnabledFolders'] = src_policy.get('EnabledFolders', [])
+                        p['ExcludedSubFolders'] = src_policy.get('ExcludedSubFolders', [])
+                    
+                    if data.copy_policy:
+                        p['EnableContentDownloading'] = src_policy.get('EnableContentDownloading', True)
+                        p['EnableSyncTranscoding'] = src_policy.get('EnableSyncTranscoding', True)
+                        p['EnableVideoPlaybackTranscoding'] = src_policy.get('EnableVideoPlaybackTranscoding', True)
+                        p['EnablePlaybackRemuxing'] = src_policy.get('EnablePlaybackRemuxing', True)
+                        p['EnableAudioPlaybackTranscoding'] = src_policy.get('EnableAudioPlaybackTranscoding', True)
+                        
+                    if data.copy_parental:
+                        if 'MaxParentalRating' in src_policy: p['MaxParentalRating'] = src_policy['MaxParentalRating']
+                        else: p.pop('MaxParentalRating', None)
+                    
+                    # 剥离多余冗余参数后提交
+                    for k in ['BlockedMediaFolders','BlockedChannels','EnableAllChannels','EnabledChannels','BlockedTags','AllowedTags']: p.pop(k, None)
+                    requests.post(f"{host}/emby/Users/{uid}/Policy?api_key={key}", json=p, headers={"Content-Type": "application/json", "X-Emby-Token": key})
+
         return {"status": "success", "message": f"成功操作了 {len(data.user_ids)} 个用户"}
     except Exception as e: return {"status": "error", "message": str(e)}
 

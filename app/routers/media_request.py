@@ -415,7 +415,9 @@ def batch_manage_action(data: BulkAdminActionModel, request: Request):
         elif data.action == "finish":
             execute_sql("UPDATE media_requests SET status = 2 WHERE tmdb_id = ? AND season = ?", (tid, sn))
         elif data.action == "delete":
-            execute_sql("DELETE FROM media_requests WHERE tmdb_id = ? AND season = ?; DELETE FROM request_users WHERE tmdb_id = ? AND season = ?", (tid, sn, tid, sn))
+            # 🔥 修复：分开执行删除操作，同时删除主表和用户订阅表
+            execute_sql("DELETE FROM media_requests WHERE tmdb_id = ? AND season = ?", (tid, sn))
+            execute_sql("DELETE FROM request_users WHERE tmdb_id = ? AND season = ?", (tid, sn))
             
     return {"status": "success", "message": f"操作已执行"}
 

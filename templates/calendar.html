@@ -111,7 +111,7 @@ let currentOffset = 0;
 let currentServerId = ""; 
 let currentEmbyUrl = "";
 let scrollObserver = null;
-let isScrolling = false; // 🔥 核心锁：防止横向纵向滚动动画打架
+let isScrolling = false; 
 const imgBase = "https://image.tmdb.org/t/p/w500";
 
 document.addEventListener('DOMContentLoaded', () => fetchCalendar(false));
@@ -162,14 +162,10 @@ async function fetchCalendar(forceRefresh = false) {
         loadingEl.classList.add('hidden');
         gridEl.classList.remove('hidden');
 
-        // 🔥 修复自动跳转：初始化加载时自动定位到今天
         if (currentOffset === 0 && window.innerWidth < 768) {
             const todayIndex = data.days.findIndex(d => d.is_today);
             if (todayIndex !== -1) {
-                // 给图片一点点渲染时间，确保定位精准
-                setTimeout(() => {
-                    scrollToDay(todayIndex);
-                }, 300); 
+                setTimeout(() => scrollToDay(todayIndex), 500); 
             }
         }
 
@@ -214,7 +210,9 @@ function renderCalendar(days) {
             : day.items.map(item => generateCardHtml(item)).join('');
 
         return `
-            <div id="day-section-${index}" class="day-section flex flex-col gap-3 md:gap-4 relative" style="scroll-margin-top: 135px;">
+            <div id="day-section-${index}" class="day-section flex flex-col gap-3 md:gap-4 relative">
+                
+                <div id="scroll-anchor-${index}" class="absolute -top-[140px] pointer-events-none"></div>
                 
                 <div class="hidden md:flex justify-between items-end pb-2 pt-3 mb-1 border-b-2 ${isToday ? 'border-indigo-500' : 'border-gray-100 dark:border-gray-800'} sticky top-[72px] z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md">
                     <span class="font-black text-base ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-800 dark:text-gray-200'}">${isToday ? '今天' : day.weekday_cn}</span>
@@ -285,7 +283,6 @@ function setupScrollSpy() {
     const sections = document.querySelectorAll('.day-section');
     scrollObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            // 🔥 当非强制滚动锁定时，才允许触发横向滚动，避免动画打架
             if (entry.isIntersecting && !isScrolling) {
                 const dayIndex = entry.target.id.split('-')[2];
                 highlightNavBtn(dayIndex, true); 
@@ -337,27 +334,18 @@ function highlightNavBtn(activeIndex, isAutoScroll = false) {
     }
 }
 
-// 🔥 加上滚动锁，完美解决点击不跳转的连环冲突问题
+// 🔥 这里也是核心：锁定滚动状态 -> 利用隐形锚点跳转 -> 释放状态
 function scrollToDay(index) {
-    const section = document.getElementById(`day-section-${index}`);
-    const headerContainer = document.getElementById('sticky-header-container');
-    
-    if (section && headerContainer) {
-        isScrolling = true; // 上锁，禁止 ScrollSpy 横向滚动干扰
-        
-        const headerHeight = headerContainer.offsetHeight;
-        const targetY = section.getBoundingClientRect().top + window.scrollY - headerHeight - 15;
-        
-        window.scrollTo({
-            top: targetY,
-            behavior: "smooth"
-        });
+    const anchor = document.getElementById(`scroll-anchor-${index}`);
+    if (anchor) {
+        isScrolling = true; // 上锁，防止监听器抢戏
+        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
         if (window.innerWidth < 768) { 
-            highlightNavBtn(index, false); // 仅高亮，不触发横向动画
+            highlightNavBtn(index, false); // 点击时仅变色，顶栏不居中滚动
         }
         
-        // 等待页面滚动平滑完成后解锁 (通常需要 600-800ms)
+        // 动画大概需要几百毫秒，之后解锁
         setTimeout(() => {
             isScrolling = false;
         }, 800);

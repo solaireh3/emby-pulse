@@ -104,68 +104,39 @@ class TelegramBot:
         
         if ip in self.ip_cache: return self.ip_cache[ip]
         loc = ""
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         
-        # --- 如果是 IPv6，直接走高精度国际接口，跳过国内垃圾 API ---
-        if is_ipv6:
+        # 🔥 方案 1：国内测速网高精度 API (对三大运营商 IPv6 支持极佳)
+        try:
+            res = requests.get(f"https://forge.speedtest.cn/api/location/info?ip={ip}", headers=headers, timeout=3)
+            if res.status_code == 200:
+                d = res.json()
+                if d.get("country"):
+                    prov = d.get("province", "")
+                    city = d.get("city", "")
+                    isp = d.get("isp", "")
+                    loc = f"{d.get('country')} {prov} {city} {isp}".strip()
+        except: pass
+
+        # 🔥 方案 2：ZXINC 纯真 IPv6 数据库接口 (国内最强备用)
+        if not loc or "上饶" in loc:
             try:
-                # 方案 1: ipapi.co (对 IPv6 支持最好)
-                headers = {"User-Agent": "Mozilla/5.0"}
-                res = requests.get(f"https://ipapi.co/{ip}/json/", headers=headers, timeout=4)
+                res = requests.get(f"https://ip.zxinc.org/api.php?type=json&ip={ip}", headers=headers, timeout=3)
                 if res.status_code == 200:
                     d = res.json()
-                    if not d.get("error"):
-                        country = d.get('country_name', '')
-                        region = d.get('region', '')
-                        city = d.get('city', '')
-                        # 翻译中国地区名称
-                        if country == "China": country = "中国"
-                        if city: loc = f"{country} {region} {city}".strip()
+                    if d.get('code') == 0 and d.get('data'):
+                        loc = d['data'].get('location', '')
             except: pass
-            
-            if not loc:
-                try:
-                    # 方案 2: ipwhois.app (备用通道)
-                    res = requests.get(f"https://ipwhois.app/json/{ip}?lang=zh-CN", timeout=4)
-                    if res.status_code == 200:
-                        d = res.json()
-                        if d.get('success'):
-                            loc = f"{d.get('country', '')} {d.get('region', '')} {d.get('city', '')}".strip()
-                except: pass
-                
-        # --- 如果是 IPv4，保留国内快速接口 + ip-api 兜底 ---
-        else:
+
+        # 方案 3：国际通用 ip-api 兜底
+        if not loc or "上饶" in loc:
             try:
-                res = requests.get(f"https://api.vvhan.com/api/ipInfo?ip={ip}", timeout=3)
+                res = requests.get(f"http://ip-api.com/json/{ip}?lang=zh-CN", headers=headers, timeout=3)
                 if res.status_code == 200:
-                    data = res.json()
-                    if data.get('success'):
-                        info = data.get('info', {})
-                        country = info.get('country', '')
-                        prov = info.get('prov', '')
-                        city = info.get('city', '')
-                        if prov or city: loc = f"{country} {prov} {city}".strip()
+                    d = res.json()
+                    if d.get('status') == 'success':
+                        loc = f"{d.get('country', '')} {d.get('regionName', '')} {d.get('city', '')}".strip()
             except: pass
-            
-            if not loc or loc == "中国  ":
-                try:
-                    res = requests.get(f"https://whois.pconline.com.cn/ipJson.jsp?ip={ip}&json=true", timeout=3)
-                    res.encoding = 'gbk'
-                    if res.status_code == 200:
-                        addr = res.json().get('addr', '')
-                        if addr and "本机地址" not in addr: loc = addr.strip()
-                except: pass
-                
-            if not loc or "江西上饶" in loc: 
-                try:
-                    res = requests.get(f"http://ip-api.com/json/{ip}?lang=zh-CN", timeout=3)
-                    if res.status_code == 200:
-                        d = res.json()
-                        if d.get('status') == 'success':
-                            country = d.get('country', '')
-                            region = d.get('regionName', '')
-                            city = d.get('city', '')
-                            loc = f"{country} {region} {city}".strip()
-                except: pass
 
         # --- 最终清理与格式化 ---
         if not loc: 
@@ -174,8 +145,8 @@ class TelegramBot:
             loc = loc.replace("省", "").replace("市", "").replace("中国 中国", "中国").strip()
             loc = re.sub(r'\s+', ' ', loc)
             
-        # 绝不缓存错误的代理解析地址
-        if loc != "未知地区" and "江西上饶" not in loc:
+        # 绝不缓存带有幽灵代理特征的地址
+        if loc != "未知地区" and "上饶" not in loc:
             if len(self.ip_cache) > 1000: self.ip_cache.clear()
             self.ip_cache[ip] = loc
             

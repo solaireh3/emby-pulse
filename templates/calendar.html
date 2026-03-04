@@ -74,35 +74,35 @@
 <div id="detail-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeDetails()"></div>
     
-    <div id="modal-container" class="relative w-[92%] sm:w-full max-w-md md:max-w-4xl bg-white dark:bg-gray-900 shadow-2xl rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-300 ease-out scale-95 opacity-0 flex flex-row h-[60vh] md:h-[65vh]">
+    <div id="modal-container" class="relative w-[95%] sm:w-full max-w-md md:max-w-3xl bg-white dark:bg-gray-900 shadow-2xl rounded-xl md:rounded-3xl overflow-hidden transition-all duration-300 ease-out scale-95 opacity-0">
         
-        <button onclick="closeDetails()" class="absolute top-3 right-3 md:top-4 md:right-4 w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-black/20 dark:bg-white/10 text-white hover:bg-indigo-500 transition-all z-50 backdrop-blur-md">
+        <button onclick="closeDetails()" class="absolute top-2.5 right-2.5 md:top-4 md:right-4 w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800/80 text-gray-500 hover:text-indigo-500 transition-all z-50 backdrop-blur-md">
             <i class="fa-solid fa-xmark text-sm"></i>
         </button>
         
-        <div class="w-[40%] md:w-[40%] h-full relative shrink-0 bg-gray-900 z-10">
-            <img id="m-poster" src="" class="absolute inset-0 w-full h-full object-cover shadow-[5px_0_15px_rgba(0,0,0,0.1)]">
-            <div class="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent"></div>
+        <div class="w-[42%] md:w-[35%] aspect-[2/3] relative shrink-0 bg-gray-900 z-10 border-r border-gray-100 dark:border-gray-800">
+            <img id="m-poster" src="" class="absolute inset-0 w-full h-full object-cover">
+            <div class="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/60 to-transparent"></div>
         </div>
         
-        <div class="w-[60%] md:w-[60%] h-full p-4 md:p-8 flex flex-col justify-start relative overflow-y-auto custom-scroll z-20 bg-white/50 dark:bg-gray-900/50">
+        <div class="absolute top-0 right-0 bottom-0 w-[58%] md:w-[65%] flex flex-col justify-start p-3.5 md:p-6 lg:p-8 overflow-y-auto custom-scroll z-20 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md">
             
-            <h3 id="m-title" class="text-lg md:text-3xl font-black text-gray-900 dark:text-white leading-tight pr-6 md:pr-0"></h3>
+            <h3 id="m-title" class="text-base md:text-2xl lg:text-3xl font-black text-gray-900 dark:text-white leading-tight pr-6 md:pr-0 mb-1 md:mb-3"></h3>
             
-            <div class="flex flex-wrap items-center gap-2 mt-2 md:mt-3">
-                <span id="m-episode-label" class="text-indigo-600 dark:text-indigo-400 font-mono font-bold bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/30 text-[10px] md:text-sm"></span>
-                <span id="m-status-badge" class="px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white"></span>
+            <div class="flex flex-wrap items-center gap-1.5 md:gap-2 mb-1.5 md:mb-4">
+                <span id="m-episode-label" class="text-indigo-600 dark:text-indigo-400 font-mono font-bold bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/30 text-[9px] md:text-sm"></span>
+                <span id="m-status-badge" class="px-1.5 py-0.5 rounded text-[8px] md:text-[10px] font-black uppercase tracking-widest text-white"></span>
             </div>
             
-            <p class="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 mt-3 md:mt-4 font-mono flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-800 pb-3">
+            <p class="text-[9px] md:text-xs text-gray-500 dark:text-gray-400 font-mono flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-800 pb-2 md:pb-4 mb-1.5 md:mb-4">
                 <i class="fa-regular fa-clock"></i> <span id="m-date-val"></span>
             </p>
             
-            <div class="mt-3 md:mt-4 text-[11px] md:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pr-1 md:pr-2 pb-4">
+            <div class="text-[10px] md:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pr-1 md:pr-2 flex-1">
                 <p id="m-description"></p>
             </div>
             
-            <div id="m-actions" class="mt-auto pt-4 flex gap-2 md:gap-3"></div>
+            <div id="m-actions" class="mt-3 md:mt-6 pt-3 border-t border-gray-50 dark:border-gray-800/50"></div>
         </div>
     </div>
 </div>
@@ -194,7 +194,7 @@ function renderCalendar(days) {
             : day.items.map(item => generateCardHtml(item)).join('');
 
         return `
-            <div id="day-section-${index}" class="day-section flex flex-col gap-3 md:gap-4 relative" style="scroll-margin-top: 140px;">
+            <div id="day-section-${index}" class="day-section flex flex-col gap-3 md:gap-4 relative">
                 
                 <div class="hidden md:flex justify-between items-end pb-2 pt-3 mb-1 border-b-2 ${isToday ? 'border-indigo-500' : 'border-gray-100 dark:border-gray-800'} sticky top-[72px] z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md">
                     <span class="font-black text-base ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-800 dark:text-gray-200'}">${day.weekday_cn}</span>
@@ -307,14 +307,20 @@ function highlightNavBtn(activeIndex) {
     }
 }
 
-// 🔥 核心修复 1: 绝对确保滚动生效的方法，使用 setTimeout 破除事件阻塞
+// 🔥 核心修复：绝对坐标计算定位法，无视浏览器魔改限制，100% 精准跳转
 function scrollToDay(index) {
     const section = document.getElementById(`day-section-${index}`);
-    if (section) {
-        // 利用 setTimeout 将滚动任务推迟到渲染周期末尾执行，防止在移动端 Safari/Chrome 被忽略
-        setTimeout(() => {
-            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 50);
+    const headerContainer = document.getElementById('sticky-header-container');
+    
+    if (section && headerContainer) {
+        // 利用 pageYOffset 获取当前全局绝对滚动进度，减去吸顶导航高度预留位置
+        const headerHeight = headerContainer.offsetHeight;
+        const targetY = section.getBoundingClientRect().top + window.pageYOffset - headerHeight - 15;
+        
+        window.scrollTo({
+            top: targetY,
+            behavior: "smooth"
+        });
         
         if (window.innerWidth < 768) { 
             highlightNavBtn(index); 
@@ -344,13 +350,13 @@ function showDetails(item) {
 
     if (isReady) {
         actions.innerHTML = `
-            <button onclick="playItem('${item.series_id}')" class="flex-1 py-2 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg md:rounded-xl text-[10px] md:text-sm font-black shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex justify-center gap-1.5">
+            <button onclick="playItem('${item.series_id}')" class="w-full py-1.5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg md:rounded-xl text-[10px] md:text-sm font-black shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-play mt-0.5"></i> 立即播放
             </button>`;
     } else {
         const copyTxt = `${item.series_name} S${String(item.season).padStart(2,'0')}E${String(item.episode).padStart(2,'0')}`;
         actions.innerHTML = `
-            <button onclick="copyToClipboard('${copyTxt}')" class="flex-1 py-2 md:py-3 bg-gray-800 dark:bg-gray-700 text-white rounded-lg md:rounded-xl text-[10px] md:text-sm font-black active:scale-95 transition-all flex justify-center gap-1.5">
+            <button onclick="copyToClipboard('${copyTxt}')" class="w-full py-1.5 md:py-3 bg-gray-800 dark:bg-gray-700 text-white rounded-lg md:rounded-xl text-[10px] md:text-sm font-black active:scale-95 transition-all flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-copy mt-0.5"></i> 复制排期
             </button>`;
     }

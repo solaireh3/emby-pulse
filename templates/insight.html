@@ -8,9 +8,8 @@
     .bento-card:active { transform: scale(0.97); }
     .bento-active { border-color: #6366f1 !important; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important; background-color: rgba(99, 102, 241, 0.05) !important; }
     .dark .bento-active { border-color: #818cf8 !important; background-color: rgba(99, 102, 241, 0.1) !important; }
-    .energy-bar { height: 4px; border-radius: 2px; transition: width 1s ease-out; }
+    .energy-bar { height: 4px; border-radius: 2px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
     
-    /* 居中浮窗入场动画 */
     .modal-enter { animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     @keyframes modalEnter {
         0% { opacity: 0; transform: scale(0.95) translateY(10px); }
@@ -30,24 +29,24 @@
             <div>
                 <div class="flex items-center gap-2">
                     <h1 class="text-xl font-black text-gray-900 dark:text-white">全景画质盘点</h1>
-                    <span class="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md" id="total-count-badge">总计: 0 部</span>
+                    <span class="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 shadow-sm" id="total-count-badge">总计: 0 部</span>
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5" id="scan-time">点击卡片切换视图，探索媒体库质量</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <button onclick="openIgnoreModal()" class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl transition shadow-sm flex items-center gap-2">
+            <button onclick="openIgnoreModal()" class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl transition shadow-sm flex items-center gap-2 border border-transparent hover:border-gray-300 dark:hover:border-gray-500">
                 <i class="fa-solid fa-trash-can-arrow-up"></i> <span class="hidden sm:inline">回收站</span>
             </button>
             <button onclick="loadQualityData(true)" id="refresh-btn" class="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition active:scale-95 flex items-center gap-2">
-                <i class="fa-solid fa-rotate"></i> 深度扫描
+                <i class="fa-solid fa-rotate" id="refresh-icon"></i> 深度重扫
             </button>
         </div>
     </div>
 
     <div id="loading" class="text-center py-32 text-gray-400">
         <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-4 text-indigo-500"></i>
-        <p class="text-sm font-bold">正在提取并解析媒体流元数据...</p>
+        <p class="text-sm font-bold">正在极速加载并生成质量快照...</p>
     </div>
 
     <div id="dashboard" class="hidden animate-fade-in grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
@@ -56,7 +55,6 @@
             <h3 class="text-sm font-black text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2 uppercase tracking-wide">
                 <i class="fa-solid fa-expand text-blue-500"></i> 分辨率矩阵
             </h3>
-            
             <div class="grid grid-cols-2 gap-3 md:gap-4">
                 <div class="bento-card bento-active border border-gray-200 dark:border-gray-700 rounded-2xl p-4 relative overflow-hidden" onclick="switchView('4k', this)">
                     <div class="absolute -right-4 -top-4 opacity-[0.03] dark:opacity-10 pointer-events-none"><i class="fa-solid fa-tv text-8xl"></i></div>
@@ -78,8 +76,8 @@
                 </div>
                 
                 <div class="bento-card border border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-900/10 rounded-2xl p-4 relative overflow-hidden" onclick="switchView('sd', this)">
-                    <div class="text-rose-500 dark:text-rose-400 text-xs font-bold mb-1 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> 标清/远古画质</div>
-                    <div class="text-2xl font-black text-rose-600 dark:text-rose-400 flex items-end gap-1" id="stat-sd">0 <span class="text-xs text-rose-400/60 font-normal pb-1.5">需洗版</span></div>
+                    <div class="text-rose-500 dark:text-rose-400 text-xs font-bold mb-1 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> 远古画质(需洗版)</div>
+                    <div class="text-2xl font-black text-rose-600 dark:text-rose-400 flex items-end gap-1" id="stat-sd">0 <span class="text-xs text-rose-400/60 font-normal pb-1.5">部</span></div>
                     <div class="w-full bg-rose-100 dark:bg-rose-900 mt-3 rounded-full overflow-hidden"><div class="energy-bar bg-rose-500 w-0" id="bar-sd"></div></div>
                 </div>
             </div>
@@ -89,7 +87,6 @@
             <h3 class="text-sm font-black text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2 uppercase tracking-wide">
                 <i class="fa-solid fa-eye text-purple-500"></i> 光影与动态范围
             </h3>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 h-[calc(100%-2rem)] pb-1.5">
                 <div class="bento-card border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50/50 to-fuchsia-50/50 dark:from-purple-900/20 dark:to-fuchsia-900/20 rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between" onclick="switchView('dolby_vision', this)">
                     <div class="absolute -right-2 top-2 opacity-10 pointer-events-none"><i class="fa-solid fa-certificate text-6xl text-purple-500"></i></div>
@@ -140,8 +137,7 @@
                 <span class="text-xs font-mono font-bold text-gray-500 bg-white dark:bg-gray-900 px-3 py-1 rounded-md shadow-sm border border-gray-200 dark:border-gray-700" id="list-count">0 部</span>
             </div>
         </div>
-        <div id="movie-list" class="divide-y divide-gray-100 dark:divide-gray-700/50 max-h-[600px] overflow-y-auto custom-scrollbar p-2">
-        </div>
+        <div id="movie-list" class="divide-y divide-gray-100 dark:divide-gray-700/50 max-h-[600px] overflow-y-auto custom-scrollbar p-2"></div>
     </div>
 </div>
 
@@ -163,9 +159,7 @@
             </button>
         </div>
         
-        <div class="flex-1 overflow-y-auto custom-scrollbar p-2" id="ignore-list-content">
-            <div class="text-center py-20 text-gray-400 text-sm">回收站是空的</div>
-        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-2" id="ignore-list-content"></div>
     </div>
 </div>
 
@@ -176,7 +170,7 @@
     let globalMoviesData = {};
     let currentView = '4k';
     let selectedIgnores = new Set();
-    let selectedListView = new Set(); // 列表界面的多选集合
+    let selectedListView = new Set(); 
     
     const viewNames = {
         '4k': 'Ultra HD (4K)', '1080p': 'Full HD (1080P)', '720p': 'HD (720P)', 'sd': '标清/远古画质 (需洗版)',
@@ -192,8 +186,10 @@
         const btn = document.getElementById('refresh-btn');
         const icon = document.getElementById('refresh-icon');
         
-        loading.classList.remove('hidden'); dash.classList.add('hidden'); listC.classList.add('hidden');
-        if(force) { btn.disabled = true; icon.classList.add('fa-spin'); }
+        if(force) {
+            loading.classList.remove('hidden'); dash.classList.add('hidden'); listC.classList.add('hidden');
+            btn.disabled = true; icon.classList.add('fa-spin');
+        }
 
         try {
             const res = await fetch(`/api/insight/quality${force ? '?force_refresh=true' : ''}`);
@@ -203,34 +199,47 @@
                 const d = json.data;
                 globalMoviesData = d.movies;
                 
-                document.getElementById('total-count-badge').innerText = `总计: ${d.total_count} 部`;
+                document.getElementById('total-count-badge').innerText = `已排查: ${d.total_count} 部真实数据`;
+                if(d.scan_time_str) document.getElementById('scan-time').innerText = `系统已准备完毕，最后快照: ${d.scan_time_str}`;
                 
-                document.getElementById('stat-4k').innerHTML = `${d.movies['4k'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
-                document.getElementById('stat-1080p').innerHTML = `${d.movies['1080p'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
-                document.getElementById('stat-720p').innerHTML = `${d.movies['720p'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
-                document.getElementById('stat-sd').innerHTML = `${d.movies['sd'].length} <span class="text-xs text-rose-400/60 font-normal pb-1.5">需洗版</span>`;
-                
-                document.getElementById('stat-dv').innerText = d.movies['dolby_vision'].length;
-                document.getElementById('stat-hdr').innerText = d.movies['hdr10'].length;
-                document.getElementById('stat-sdr').innerText = d.movies['sdr'].length;
-
-                const totalRes = Math.max(d.movies['4k'].length + d.movies['1080p'].length + d.movies['720p'].length + d.movies['sd'].length, 1);
-                setTimeout(() => {
-                    document.getElementById('bar-4k').style.width = `${(d.movies['4k'].length/totalRes)*100}%`;
-                    document.getElementById('bar-1080p').style.width = `${(d.movies['1080p'].length/totalRes)*100}%`;
-                    document.getElementById('bar-720p').style.width = `${(d.movies['720p'].length/totalRes)*100}%`;
-                    document.getElementById('bar-sd').style.width = `${(d.movies['sd'].length/totalRes)*100}%`;
-                }, 100);
-
-                if(d.scan_time_str) document.getElementById('scan-time').innerText = `最后快照: ${d.scan_time_str}`;
+                updateStatCounts();
 
                 loading.classList.add('hidden'); dash.classList.remove('hidden'); listC.classList.remove('hidden');
-                
                 renderListView(currentView);
             }
         } catch(e) {} finally {
             if(force) { btn.disabled = false; icon.classList.remove('fa-spin'); }
         }
+    }
+
+    // 🏆 局部刷新重算计数核心逻辑 (毫秒级 UI 变化，不再重新请求 Emby)
+    function updateStatCounts() {
+        const d = globalMoviesData;
+        document.getElementById('stat-4k').innerHTML = `${d['4k'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
+        document.getElementById('stat-1080p').innerHTML = `${d['1080p'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
+        document.getElementById('stat-720p').innerHTML = `${d['720p'].length} <span class="text-xs text-gray-400 font-normal pb-1.5">部</span>`;
+        document.getElementById('stat-sd').innerHTML = `${d['sd'].length} <span class="text-xs text-rose-400/60 font-normal pb-1.5">部</span>`;
+        
+        document.getElementById('stat-dv').innerText = d['dolby_vision'].length;
+        document.getElementById('stat-hdr').innerText = d['hdr10'].length;
+        document.getElementById('stat-sdr').innerText = d['sdr'].length;
+
+        const totalRes = Math.max(d['4k'].length + d['1080p'].length + d['720p'].length + d['sd'].length, 1);
+        setTimeout(() => {
+            document.getElementById('bar-4k').style.width = `${(d['4k'].length/totalRes)*100}%`;
+            document.getElementById('bar-1080p').style.width = `${(d['1080p'].length/totalRes)*100}%`;
+            document.getElementById('bar-720p').style.width = `${(d['720p'].length/totalRes)*100}%`;
+            document.getElementById('bar-sd').style.width = `${(d['sd'].length/totalRes)*100}%`;
+        }, 50);
+    }
+
+    // 🚀 在前端直接抹除忽略掉的元素
+    function removeLocalItem(id) {
+        for (let key in globalMoviesData) {
+            globalMoviesData[key] = globalMoviesData[key].filter(m => m.Id !== id);
+        }
+        updateStatCounts();
+        renderListView(currentView); 
     }
 
     function switchView(viewKey, cardElement) {
@@ -241,11 +250,10 @@
 
     function renderListView(viewKey) {
         currentView = viewKey;
-        selectedListView.clear(); // 切换视图时清空多选
+        selectedListView.clear(); 
         
         document.getElementById('list-title').innerHTML = viewNames[viewKey];
         
-        // 只有 SD (标清) 视图才显示批量忽略工具
         const batchCheckbox = document.getElementById('batch-ignore-checkbox');
         const batchBtn = document.getElementById('batch-ignore-btn');
         if (viewKey === 'sd') {
@@ -258,29 +266,21 @@
         }
         updateBatchIgnoreBtn();
 
-        // 🔥 核心过滤：剔除没有分辨率数据的幽灵影片
-        let rawMovies = globalMoviesData[viewKey] || [];
-        if (['4k', '1080p', '720p', 'sd'].includes(viewKey)) {
-            rawMovies = rawMovies.filter(m => m.Resolution && m.Resolution !== '0x0' && m.Resolution !== 'x');
-        }
-        const movies = rawMovies;
+        const movies = globalMoviesData[viewKey] || [];
         
         document.getElementById('list-count').innerText = `${movies.length} 部`;
         const container = document.getElementById('movie-list');
         
         if (movies.length === 0) {
-            container.innerHTML = '<div class="py-16 text-center text-gray-400 font-medium">当前分类下暂无数据 ☕</div>';
+            container.innerHTML = '<div class="py-16 text-center text-gray-400 font-medium tracking-widest"><i class="fa-solid fa-ghost mb-3 text-3xl opacity-30 block"></i>当前分类已清理完毕</div>';
             return;
         }
 
         let html = '';
         movies.forEach(m => {
             const imgUrl = `/api/proxy/smart_image?item_id=${m.Id}&name=${encodeURIComponent(m.Name)}&type=Primary`;
-            
-            // 列表复选框
             const checkHtml = viewKey === 'sd' 
-                ? `<input type="checkbox" value="${m.Id}" data-name="${m.Name.replace(/"/g, '&quot;')}" class="list-checkbox w-4 h-4 text-rose-500 rounded focus:ring-rose-500 cursor-pointer mr-3" onchange="toggleSelectList(this)">`
-                : ``;
+                ? `<input type="checkbox" value="${m.Id}" data-name="${m.Name.replace(/"/g, '&quot;')}" class="list-checkbox w-4 h-4 text-rose-500 rounded focus:ring-rose-500 cursor-pointer mr-3" onchange="toggleSelectList(this)">` : ``;
 
             html += `
             <label class="flex items-center p-2.5 md:p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition rounded-xl group cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
@@ -298,12 +298,10 @@
         container.innerHTML = html;
     }
 
-    // --- 批量忽略逻辑 ---
     function toggleSelectList(checkbox) {
         if(checkbox.checked) {
             selectedListView.add({id: checkbox.value, name: checkbox.dataset.name});
         } else {
-            // 需要根据ID找到对象并删除
             for(let item of selectedListView) {
                 if(item.id === checkbox.value) { selectedListView.delete(item); break; }
             }
@@ -321,7 +319,7 @@
     function updateBatchIgnoreBtn() {
         const btn = document.getElementById('batch-ignore-btn');
         if(selectedListView.size > 0) {
-            btn.innerText = `批量忽略 (${selectedListView.size})`;
+            btn.innerText = `执行批量隔离 (${selectedListView.size})`;
             btn.classList.add('bg-rose-500', 'text-white', 'shadow-md');
             btn.classList.remove('bg-rose-100', 'text-rose-600');
         } else {
@@ -331,6 +329,7 @@
         }
     }
 
+    // 💥 批量忽略：秒级响应，本地剔除！
     async function batchIgnore() {
         if(selectedListView.size === 0) return;
         const btn = document.getElementById('batch-ignore-btn');
@@ -338,7 +337,6 @@
         btn.disabled = true;
         
         try {
-            // 串行执行忽略请求（可以优化为后端批量接口，但几十个并发也能接受）
             const promises = Array.from(selectedListView).map(item => 
                 fetch('/api/insight/ignore', {
                     method: 'POST', headers:{'Content-Type': 'application/json'},
@@ -347,30 +345,26 @@
             );
             await Promise.all(promises);
             
-            // 执行完毕后重新拉取最新数据（强制刷新一次即可）
-            await loadQualityData(true);
+            // 🔥 后端写完数据库后，前端直接本地抹除，无需长达几十秒的重扫
+            selectedListView.forEach(item => removeLocalItem(item.id));
+            
             selectedListView.clear();
             document.getElementById('batch-ignore-checkbox').querySelector('input').checked = false;
             updateBatchIgnoreBtn();
-            
         } catch(e) {
-            alert('部分忽略操作可能失败');
-            btn.disabled = false;
-        }
+            alert('网络异常');
+        } finally { btn.disabled = false; }
     }
 
-    // --- 居中浮窗：回收站逻辑 ---
     function openIgnoreModal() {
         const modal = document.getElementById('ignore-modal');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.classList.remove('hidden'); modal.classList.add('flex');
         loadIgnoreList();
     }
 
     function closeIgnoreModal() {
         const modal = document.getElementById('ignore-modal');
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        modal.classList.add('hidden'); modal.classList.remove('flex');
         selectedIgnores.clear();
     }
 
@@ -396,7 +390,7 @@
                 });
                 c.innerHTML = html;
             } else {
-                c.innerHTML = '<div class="text-center py-20 text-gray-400 text-sm"><i class="fa-solid fa-box-open text-4xl opacity-20 mb-3 block"></i>回收站是空的</div>';
+                c.innerHTML = '<div class="text-center py-20 text-gray-400 text-sm tracking-widest"><i class="fa-solid fa-box-open text-4xl opacity-20 mb-3 block"></i>回收站是空的</div>';
             }
             updateRestoreBtn();
         } catch(e){}
@@ -418,16 +412,17 @@
     function updateRestoreBtn() {
         const btn = document.getElementById('btn-restore');
         if(selectedIgnores.size > 0) {
-            btn.disabled = false; btn.innerText = `恢复所选 (${selectedIgnores.size})`;
+            btn.disabled = false; btn.innerText = `闪电恢复 (${selectedIgnores.size})`;
         } else {
             btn.disabled = true; btn.innerText = `批量恢复所选`;
         }
     }
 
+    // ⚡ 批量恢复：也是瞬间完成
     async function batchRestore() {
         if(selectedIgnores.size === 0) return;
         const btn = document.getElementById('btn-restore');
-        btn.disabled = true; btn.innerText = '恢复中...';
+        btn.disabled = true; btn.innerText = '正在调取缓存...';
         try {
             await fetch('/api/insight/unignore_batch', {
                 method: 'POST', headers:{'Content-Type':'application/json'},
@@ -435,8 +430,10 @@
             });
             selectedIgnores.clear();
             document.getElementById('select-all-ignores').checked = false;
-            await loadIgnoreList(); // 刷新回收站内的列表
-            loadQualityData(true);  // 后台静默刷新主盘点数据，将其接回来
+            
+            // 这里传 false 代表读取后端缓存重新比对，毫秒级完成，不用扫描 Emby！
+            await loadQualityData(false);  
+            closeIgnoreModal();
         } catch(e){}
     }
 </script>

@@ -110,3 +110,82 @@ async def test_moviepilot(request: Request):
             
     except requests.exceptions.RequestException as e:
         return {"status": "error", "message": f"❌ 无法连接到 MoviePilot，请检查地址或服务器网络。"}
+
+@router.post("/api/settings/fix_db")
+def api_fix_db(request: Request):
+    if not request.session.get("user"): return {"status": "error"}
+    
+    from app.core.database import DB_PATH
+    import sqlite3
+    import os
+    
+    if not os.path.exists(DB_PATH):
+        return {"status": "error", "message": "数据库文件不存在，请检查挂载路径"}
+        
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        results = []
+        
+        # 1. 检查 media_requests 表
+        try:
+            c.execute("SELECT 1 FROM media_requests LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS media_requests (
+                    tmdb_id INTEGER,
+                    media_type TEXT,
+                    title TEXT,
+                    year TEXT,
+                    poster_path TEXT,
+                    status INTEGER DEFAULT 0,
+                    season INTEGER DEFAULT 0,
+                    reject_reason TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, season)
+                )
+            ''')
+            results.append("已修复: 求片主表")
+
+        # 2. 检查 request_users 表
+        try:
+            c.execute("SELECT 1 FROM request_users LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS request_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tmdb_id INTEGER,
+                    user_id TEXT,
+                    username TEXT,
+                    season INTEGER DEFAULT 0,
+                    requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(tmdb_id, user_id, season)
+                )
+            ''')
+            results.append("已修复: 求片关联表")
+
+        # 3. 检查 insight_ignores 表
+        try:
+            c.execute("SELECT 1 FROM insight_ignores LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS insight_ignores (
+                    item_id TEXT PRIMARY KEY,
+                    item_name TEXT,
+                    ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            results.append("已修复: 盘点忽略表")
+            
+        conn.commit()
+        conn.close()
+        
+        if not results:
+            return {"status": "success", "message": "数据库结构完整健康，无需修复！"}
+        else:
+            return {"status": "success", "message": f"修复完成: {', '.join(results)}"}
+            
+    except Exception as e:
+        return {"status": "error", "message": f"修复过程中发生严重错误: {e}"}

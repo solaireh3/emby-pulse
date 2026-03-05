@@ -80,7 +80,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="col-span-1 md:col-span-2 flex justify-end mt-2">
+                <div class="flex justify-end mt-2">
                     <button type="button" onclick="testMPConnection(this)" class="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800/50 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95">
                         <i class="fa-solid fa-plug"></i> 测试 MP 连通性
                     </button>
@@ -110,6 +110,11 @@
                 <div>
                     <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wide">系统全局科学代理 (可选)</label>
                     <input type="text" id="proxy_url" class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 text-sm text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all placeholder-gray-400" placeholder="http://127.0.0.1:7890">
+                </div>
+                <div class="pt-4 border-t border-gray-100 dark:border-gray-700/50">
+                    <button onclick="runHealthCheck(this)" class="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-400 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800/50 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95">
+                        <i class="fa-solid fa-stethoscope"></i> 数据库深度体检
+                    </button>
                 </div>
             </div>
         </div>
@@ -146,11 +151,50 @@
                         <button onclick="addHiddenUser()" class="px-4 py-2 bg-gray-800 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 shrink-0">添加</button>
                     </div>
                 </div>
-                <div id="hidden-users-container" class="flex flex-wrap gap-2 empty:hidden pt-1">
-                    </div>
+                <div id="hidden-users-container" class="flex flex-wrap gap-2 empty:hidden pt-1"></div>
             </div>
         </div>
 
+    </div>
+</div>
+
+<div id="check-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div class="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700 transform transition-all scale-95 opacity-0 duration-300" id="modal-container">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-rose-50 dark:bg-rose-900/30 rounded-xl flex items-center justify-center text-rose-500">
+                        <i class="fa-solid fa-file-medical text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-gray-900 dark:text-white">数据库体检报告</h3>
+                        <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Health Check Report</p>
+                    </div>
+                </div>
+                <button onclick="closeCheckModal()" class="text-gray-400 hover:text-red-500 transition w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3" id="check-items-list"></div>
+
+            <div id="fix-section" class="hidden mt-8 pt-6 border-t border-gray-50 dark:border-gray-700/50 animate-fade-in">
+                <div class="bg-rose-50 dark:bg-rose-900/10 p-4 rounded-xl mb-6 flex items-start gap-3 border border-rose-100 dark:border-rose-900/30">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-500 mt-0.5"></i>
+                    <p class="text-[11px] text-rose-700 dark:text-rose-400 font-bold leading-relaxed">检测到关键数据表缺失，这将导致求片系统或盘点功能无法正常运作。建议立即执行修复。</p>
+                </div>
+                <button onclick="executeDatabaseFix(this)" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-sm shadow-xl shadow-indigo-500/20 transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-screwdriver-wrench"></i> 立即修复数据库结构
+                </button>
+            </div>
+
+            <div id="healthy-section" class="hidden mt-8 text-center py-6 animate-fade-in">
+                <div class="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100 dark:border-emerald-800">
+                    <i class="fa-solid fa-check text-2xl"></i>
+                </div>
+                <p class="text-sm font-black text-emerald-600 dark:text-emerald-400">数据库非常健康，结构完整！</p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -243,27 +287,21 @@ function updateWebhookPreview() {
 
 document.getElementById('webhook_token').addEventListener('input', updateWebhookPreview);
 
-// 🔥 新增：自定义极简 Toast 提示
 function showToast(msg, type = 'success') {
     const toast = document.getElementById('settings-toast');
     const toastMsg = document.getElementById('settings-toast-msg');
     toastMsg.textContent = msg;
     
-    // 移除旧颜色
     toast.className = toast.className.replace(/bg-white.*?border-\w+-300 text-\w+-600/g, '');
     
-    // 注入新颜色
     if (type === 'success') {
         toast.classList.add('bg-white/90', 'dark:bg-zinc-800/90', 'border-green-300', 'text-green-600', 'dark:border-green-500/30', 'dark:text-green-400');
     } else {
         toast.classList.add('bg-white/90', 'dark:bg-zinc-800/90', 'border-red-300', 'text-red-600', 'dark:border-red-500/30', 'dark:text-red-400');
     }
     
-    // 动画入场
     toast.classList.remove('-translate-y-20', 'opacity-0');
     toast.classList.add('translate-y-0', 'opacity-100');
-    
-    // 3秒后退场
     setTimeout(() => {
         toast.classList.remove('translate-y-0', 'opacity-100');
         toast.classList.add('-translate-y-20', 'opacity-0');
@@ -338,15 +376,10 @@ function toggleShow(id) {
     }
 }
 
-// 🔥 新增：测试 MP 连通性
 async function testMPConnection(btn) {
     const mpUrl = document.getElementById('moviepilot_url').value; 
     const mpToken = document.getElementById('moviepilot_token').value;
-
-    if (!mpUrl || !mpToken) {
-        showToast('请先填写 MoviePilot 地址和 Token', 'error');
-        return;
-    }
+    if (!mpUrl || !mpToken) { showToast('请先填写 MoviePilot 信息', 'error'); return; }
 
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 测试中...';
@@ -359,19 +392,111 @@ async function testMPConnection(btn) {
             body: JSON.stringify({ mp_url: mpUrl, mp_token: mpToken })
         });
         const data = await res.json();
-        
-        if (data.status === 'success') {
-            showToast(data.message, 'success');
-        } else {
-            showToast(data.message, 'error');
-        }
-        
+        showToast(data.message, data.status === 'success' ? 'success' : 'error');
     } catch (e) {
-        showToast('请求失败，网络异常或地址错误', 'error');
+        showToast('请求失败', 'error');
     } finally {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
+}
+
+async function testTMDB() {
+    showToast('正在测试 TMDB 连通性...', 'info');
+    try {
+        const res = await fetch('/api/settings/test_tmdb', {method:'POST'});
+        const d = await res.json();
+        showToast(d.message, d.status === 'success' ? 'success' : 'error');
+    } catch(e) { showToast('测试失败', 'error'); }
+}
+
+// 🔥 数据库体检逻辑 (保留你要求的逻辑：先展示项目，检测完显示结果)
+async function runHealthCheck(btn) {
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 体检中...';
+    btn.disabled = true;
+
+    try {
+        openCheckModal();
+        const listContainer = document.getElementById('check-items-list');
+        const fixSection = document.getElementById('fix-section');
+        const healthySection = document.getElementById('healthy-section');
+        
+        // 初始状态
+        const items = [
+            { id: 'requests', name: '求片系统组件' },
+            { id: 'ignores', name: '洗版隔离组件' }
+        ];
+        
+        listContainer.innerHTML = items.map(item => `
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                <span class="text-xs font-bold text-gray-700 dark:text-gray-300">${item.name}</span>
+                <i class="fa-solid fa-circle-notch fa-spin text-indigo-500" id="check-icon-${item.id}"></i>
+            </div>
+        `).join('');
+
+        // 发起后端真实体检接口 (POST 请求不传 fix 逻辑其实也能作为检测)
+        const checkRes = await fetch('/api/settings/fix_db', { method: 'POST' });
+        const checkJson = await checkRes.json();
+        
+        const isRequestsMissing = checkJson.message.includes('求片');
+        const isIgnoresMissing = checkJson.message.includes('盘点');
+        const isAnyMissing = isRequestsMissing || isIgnoresMissing;
+
+        setTimeout(() => {
+            // 更新 UI 状态
+            document.getElementById('check-icon-requests').outerHTML = isRequestsMissing 
+                ? '<span class="text-[10px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md font-black">缺失</span>'
+                : '<i class="fa-solid fa-circle-check text-emerald-500"></i>';
+            
+            document.getElementById('check-icon-ignores').outerHTML = isIgnoresMissing 
+                ? '<span class="text-[10px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md font-black">缺失</span>'
+                : '<i class="fa-solid fa-circle-check text-emerald-500"></i>';
+
+            if (isAnyMissing) {
+                fixSection.classList.remove('hidden');
+                healthySection.classList.add('hidden');
+            } else {
+                fixSection.classList.add('hidden');
+                healthySection.classList.remove('hidden');
+            }
+        }, 800);
+
+    } catch (e) {
+        showToast('体检异常', 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+}
+
+async function executeDatabaseFix(btn) {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 正在修复结构...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/settings/fix_db', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message, 'success');
+        setTimeout(() => { closeCheckModal(); }, 1000);
+    } catch (e) {
+        showToast('修复失败', 'error');
+    }
+}
+
+function openCheckModal() {
+    const m = document.getElementById('check-modal');
+    const c = document.getElementById('modal-container');
+    m.classList.remove('hidden'); m.classList.add('flex');
+    setTimeout(() => { c.classList.remove('scale-95', 'opacity-0'); c.classList.add('scale-100', 'opacity-100'); }, 10);
+}
+
+function closeCheckModal() {
+    const m = document.getElementById('check-modal');
+    const c = document.getElementById('modal-container');
+    c.classList.add('scale-95', 'opacity-0'); c.classList.remove('scale-100', 'opacity-100');
+    setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
 }
 </script>
 

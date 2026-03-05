@@ -5,6 +5,7 @@ import urllib.parse
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import re
 
 # 初始化日志
 logger = logging.getLogger("uvicorn")
@@ -19,6 +20,14 @@ session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=100,
 # 图片 ID 映射缓存
 smart_image_cache = {}
 
+def extract_season_number(name: str):
+    """从名称中提取季号，例如 '唐朝诡事录 - 第 2 季' -> 2"""
+    m = re.search(r'第\s*(\d+)\s*季', name)
+    if m: return int(m.group(1))
+    m2 = re.search(r'S0*(\d+)', name, re.I)
+    if m2: return int(m2.group(1))
+    return None
+
 def get_real_image_id_robust(item_id: str):
     """智能 ID 转换（解决剧集封面变单集截图的问题）"""
     key = cfg.get("emby_api_key")
@@ -29,9 +38,18 @@ def get_real_image_id_robust(item_id: str):
 
     try:
         url_a = f"{host}/emby/Items/{item_id}"
-        res_a = session.get(url_a, params={**params_base, "Fields": "SeriesId,ParentId"}, timeout=3)
+        res_a = session.get(url_a, params={**params_base, "Fields": "SeriesId,ParentId,SeasonId"}, timeout=3)
         if res_a.status_code == 200:
             data = res_a.json()
+            # 🔥 核心修正：如果是 Episode，优先看有没有独立季海报
+            if data.get("Type") == "Episode":
+                if data.get("SeasonId"): 
+                    season_id = data["SeasonId"]
+                    s_res = session.get(f"{host}/emby/Items/{season_id}", params=params_base, timeout=2)
+                    if s_res.status_code == 200 and s_res.json().get("ImageTags", {}).get("Primary"):
+                        return season_id
+                if data.get("SeriesId"): return data['SeriesId']
+                
             if data.get("SeriesId"): return data['SeriesId']
             if data.get("Type") == "Episode" and data.get("ParentId"): return data['ParentId']
     except: pass
@@ -133,8 +151,10 @@ def proxy_smart_image(item_id: str, name: str = "", year: str = "", type: str = 
                         return Response(content=n_resp.content, media_type=n_resp.headers.get("Content-Type", "image/jpeg"), headers={"Cache-Control": "public, max-age=86400"})
         except requests.exceptions.RequestException: pass
 
-    # 4. 第 3 级防御：TMDB 终极兜底
+    # 4. 第 3 级防御：TMDB 终极兜底 + 季数突击
     tmdb_key = cfg.get("tmdb_api_key")
+    season_num = extract_season_number(name)
+
     if clean_name and tmdb_key:
         try:
             proxy = cfg.get("proxy_url")
@@ -146,6 +166,21 @@ def proxy_smart_image(item_id: str, name: str = "", year: str = "", type: str = 
             if t_resp.status_code == 200:
                 results = t_resp.json().get("results", [])
                 for res in results:
+                    # 🔥 触发二次突击：专门去抓取那一季的高清海报！
+                    if res.get("media_type") == "tv" and season_num is not None and img_type.lower() == 'primary':
+                        tv_id = res.get("id")
+                        season_url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_num}?api_key={tmdb_key}&language=zh-CN"
+                        s_resp = session.get(season_url, proxies=proxies, timeout=5)
+                        if s_resp.status_code == 200:
+                            s_data = s_resp.json()
+                            if s_data.get("poster_path"):
+                                final_url = f"https://image.tmdb.org/t/p/w500{s_data['poster_path']}"
+                                smart_image_cache[item_id] = final_url
+                                final_resp = session.get(final_url, proxies=proxies, timeout=8, stream=True)
+                                if final_resp.status_code == 200:
+                                    return Response(content=final_resp.content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+                    # 兜底：如果是电影，或者没识别出季数，返回主海报
                     if res.get("media_type") in ["movie", "tv"]:
                         img_path = res.get("backdrop_path") if img_type.lower() == 'backdrop' else res.get("poster_path")
                         if img_path:

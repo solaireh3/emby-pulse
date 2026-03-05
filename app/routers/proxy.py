@@ -4,25 +4,19 @@ import requests
 import urllib.parse
 import logging
 
-# 初始化日志
 logger = logging.getLogger("uvicorn")
 router = APIRouter()
 
-# 🔥 新增：智能洗版图片兜底内存缓存 (Old_ID -> New_ID)
 smart_image_cache = {}
 
 def get_real_image_id_robust(item_id: str):
-    """
-    智能 ID 转换（暴力增强版）
-    尝试多种姿势向 Emby 获取 SeriesId
-    """
+    """智能 ID 转换（解决剧集封面变单集截图的问题）"""
     key = cfg.get("emby_api_key")
     host = cfg.get("emby_host")
     if not key or not host: return item_id
 
     params_base = {"api_key": key}
 
-    # 方案 A: 标准查询
     try:
         url_a = f"{host}/emby/Items/{item_id}"
         res_a = requests.get(url_a, params={**params_base, "Fields": "SeriesId,ParentId"}, timeout=3)
@@ -32,7 +26,6 @@ def get_real_image_id_robust(item_id: str):
             if data.get("Type") == "Episode" and data.get("ParentId"): return data['ParentId']
     except: pass
 
-    # 方案 B: 祖先查询
     try:
         url_b = f"{host}/emby/Items/{item_id}/Ancestors"
         res_b = requests.get(url_b, params=params_base, timeout=3)
@@ -42,7 +35,6 @@ def get_real_image_id_robust(item_id: str):
                 if ancestor.get("Type") == "Season" and not ancestor.get("SeriesId"): return ancestor['Id']
     except: pass
 
-    # 方案 C: 列表查询
     try:
         url_c = f"{host}/emby/Items"
         res_c = requests.get(url_c, params={**params_base, "Ids": item_id, "Fields": "SeriesId", "Recursive": "true"}, timeout=3)
@@ -72,22 +64,32 @@ def proxy_image(item_id: str, img_type: str):
     except Exception: pass
     return Response(status_code=404)
 
-# ==========================================================
-# 🔥 核心增强：彻底解决洗版裂图的“智能图片寻亲接口”
-# ==========================================================
+
 @router.get("/api/proxy/smart_image")
 def proxy_smart_image(item_id: str, name: str = "", year: str = "", type: str = "Primary"):
+    """
+    🔥 三级海报防裂兜底引擎：
+    1. 查 Emby 原 ID
+    2. 查 Emby 新 ID (洗版兜底)
+    3. 查 TMDB 官方 (删库兜底)
+    """
     key = cfg.get("emby_api_key")
     host = cfg.get("emby_host")
     if not key or not host: return Response(status_code=404)
 
-    # 1. 检查内存中是否有已经“认亲成功”的新 ID
-    target_id = smart_image_cache.get(item_id, item_id)
-    
+    # 如果缓存里有 TMDB 的外部 URL，直接重定向过去
+    cached_result = smart_image_cache.get(item_id)
+    if cached_result and str(cached_result).startswith('http'):
+        return requests.get(cached_result, stream=True).content
+
+    target_id = cached_result if cached_result else item_id
     img_type = type
     params = "?maxWidth=1920&quality=80" if img_type.lower() == 'backdrop' else "?maxHeight=800&maxWidth=600&quality=90"
     
-    # 2. 尝试直接获取 (或从缓存的新ID获取)
+    # 🚨 第 1 级防御：强行转成剧集父级 ID，然后去请求
+    if img_type.lower() == 'primary':
+        target_id = get_real_image_id_robust(target_id)
+        
     url = f"{host}/emby/Items/{target_id}/Images/{img_type}{params}&api_key={key}"
     try:
         resp = requests.get(url, timeout=5, stream=True)
@@ -95,34 +97,54 @@ def proxy_smart_image(item_id: str, name: str = "", year: str = "", type: str = 
             return Response(content=resp.content, media_type=resp.headers.get("Content-Type", "image/jpeg"), headers={"Cache-Control": "public, max-age=86400"})
     except: pass
 
-    # 3. 🚨 触发洗版兜底机制：通过名字重新向 Emby 搜索最新的 ID
-    if name:
+    clean_name = name.split(' - ')[0].strip() if name else ""
+
+    # 🚨 第 2 级防御：名字搜 Emby 内部最新 ID
+    if clean_name:
         try:
-            # 清洗名字 (去掉 ' - ' 后面的季集信息，只保留主标题)
-            clean_name = name.split(' - ')[0].strip()
             search_url = f"{host}/emby/Items?SearchTerm={urllib.parse.quote(clean_name)}&IncludeItemTypes=Movie,Series,Episode&Recursive=true&api_key={key}"
-            
             s_resp = requests.get(search_url, timeout=5)
             if s_resp.status_code == 200:
                 items = s_resp.json().get("Items", [])
                 if items:
-                    # 抓取搜索到的第一个结果
                     new_id = items[0]["Id"]
-                    
-                    # 如果搜出来的是剧集/单集，进一步通过 robust 获取最准确的剧集封面 ID
                     if items[0]["Type"] in ["Episode", "Season", "Series"]:
                         new_id = get_real_image_id_robust(new_id)
-                    
-                    # 记录在缓存中，下次同一个历史记录直接用新ID秒出
                     smart_image_cache[item_id] = new_id 
                     
-                    # 重新请求新ID的图片
                     new_url = f"{host}/emby/Items/{new_id}/Images/{img_type}{params}&api_key={key}"
                     n_resp = requests.get(new_url, timeout=5, stream=True)
                     if n_resp.status_code == 200:
                         return Response(content=n_resp.content, media_type=n_resp.headers.get("Content-Type", "image/jpeg"), headers={"Cache-Control": "public, max-age=86400"})
+        except: pass
+
+    # 🚨 第 3 级防御：终极杀招！去 TMDB 拉取官方海报
+    tmdb_key = cfg.get("tmdb_api_key")
+    if clean_name and tmdb_key:
+        try:
+            proxy = cfg.get("proxy_url")
+            proxies = {"https": proxy, "http": proxy} if proxy else None
+            
+            tmdb_url = f"https://api.themoviedb.org/3/search/multi?api_key={tmdb_key}&language=zh-CN&query={urllib.parse.quote(clean_name)}"
+            t_resp = requests.get(tmdb_url, proxies=proxies, timeout=5)
+            
+            if t_resp.status_code == 200:
+                results = t_resp.json().get("results", [])
+                for res in results:
+                    if res.get("media_type") in ["movie", "tv"]:
+                        img_path = res.get("backdrop_path") if img_type.lower() == 'backdrop' else res.get("poster_path")
+                        if img_path:
+                            # 拿到 TMDB 真实图片链接
+                            tmdb_img_url = f"https://image.tmdb.org/t/p/w500{img_path}"
+                            smart_image_cache[item_id] = tmdb_img_url # 存入缓存
+                            
+                            # 代理返回这张图
+                            final_resp = requests.get(tmdb_img_url, proxies=proxies, timeout=5, stream=True)
+                            if final_resp.status_code == 200:
+                                return Response(content=final_resp.content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+                        break
         except Exception as e:
-            logger.error(f"图片寻亲兜底失败 [{name}]: {e}")
+            logger.error(f"TMDB 终极兜底失败 [{clean_name}]: {e}")
             
     return Response(status_code=404)
 

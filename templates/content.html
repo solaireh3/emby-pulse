@@ -2,77 +2,49 @@
 {% block title %}内容风云榜 - EmbyPulse{% endblock %}
 {% block head %}
 <style>
-    /* 全局沉浸式动态背景 */
-    #dynamic-backdrop {
-        position: fixed; inset: 0; z-index: -1;
-        background-size: cover; background-position: center;
-        filter: blur(40px) brightness(0.6);
-        transform: scale(1.1); /* 防止模糊后白边 */
-        opacity: 0; transition: opacity 1.5s ease-in-out;
-    }
-    .dark #dynamic-backdrop { filter: blur(50px) brightness(0.3); }
-
-    /* 领奖台卡片进阶光效 */
-    .podium-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    .podium-card:hover { transform: translateY(-8px) scale(1.02); z-index: 30; }
+    /* 极简克制的前三名特效 */
+    .podium-card { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .podium-card:hover { transform: translateY(-5px); z-index: 30; }
     
-    /* 冠亚季军特殊边框与阴影 */
-    .rank-1-border { 
-        border: 2px solid rgba(250, 204, 21, 0.6); 
-        box-shadow: 0 20px 40px -10px rgba(250, 204, 21, 0.4), inset 0 0 20px rgba(250, 204, 21, 0.2); 
-    }
-    .rank-2-border { border: 2px solid rgba(203, 213, 225, 0.6); box-shadow: 0 15px 30px -10px rgba(203, 213, 225, 0.3); }
-    .rank-3-border { border: 2px solid rgba(217, 119, 6, 0.6); box-shadow: 0 15px 30px -10px rgba(217, 119, 6, 0.3); }
+    .rank-1-border { border: 2px solid #f59e0b; box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.3); }
+    .rank-2-border { border: 2px solid #cbd5e1; box-shadow: 0 10px 30px -10px rgba(203, 213, 225, 0.2); }
+    .rank-3-border { border: 2px solid #b45309; box-shadow: 0 10px 30px -10px rgba(180, 83, 9, 0.2); }
 
-    /* 皇冠图标 */
+    /* 皇冠微动 */
     .crown-icon { 
-        position: absolute; top: -22px; left: 50%; transform: translateX(-50%); 
-        font-size: 2rem; color: #fbbf24; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); 
-        z-index: 20; animation: float 3s ease-in-out infinite;
-    }
-    @keyframes float { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
-
-    /* 毛玻璃容器 */
-    .glass-list {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-    .dark .glass-list {
-        background: rgba(31, 41, 55, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        position: absolute; top: -18px; left: 50%; transform: translateX(-50%); 
+        font-size: 1.5rem; color: #f59e0b; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
+        z-index: 20; 
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div id="dynamic-backdrop"></div>
-
-<div class="max-w-6xl mx-auto w-full px-4 md:px-8 py-6 pb-24 relative z-10">
+<div class="max-w-6xl mx-auto w-full px-4 md:px-8 py-6 pb-24">
     
-    <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 bg-white/80 dark:bg-gray-900/60 backdrop-blur-xl p-4 rounded-2xl shadow-sm border border-white/50 dark:border-gray-700/50">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
         <div class="text-center md:text-left">
             <h1 class="text-2xl md:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-3 justify-center md:justify-start tracking-tight">
-                <i class="fa-solid fa-trophy text-amber-500 drop-shadow-md"></i> 年度风云榜
+                <i class="fa-solid fa-trophy text-amber-500"></i> 年度风云榜
             </h1>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">全服播放热度与时长综合排行</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium">全服播放热度与时长综合排行</p>
         </div>
         
-        <div class="flex flex-wrap justify-center items-center gap-2">
-            <div class="flex bg-gray-200/50 dark:bg-gray-800/80 p-1 rounded-xl">
-                <button onclick="setCategory('all')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" data-cat="all">全局</button>
-                <button onclick="setCategory('Movie')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" data-cat="Movie">电影</button>
-                <button onclick="setCategory('Episode')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" data-cat="Episode">剧集</button>
+        <div class="flex flex-wrap justify-center items-center gap-2 bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="flex">
+                <button onclick="setCategory('all')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white" data-cat="all">全局</button>
+                <button onclick="setCategory('Movie')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600" data-cat="Movie">电影</button>
+                <button onclick="setCategory('Episode')" class="cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600" data-cat="Episode">剧集</button>
             </div>
-            <div class="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
-            <select id="user-select" onchange="changeUser()" class="bg-gray-100 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none cursor-pointer max-w-[120px] truncate shadow-sm transition hover:bg-gray-200 dark:hover:bg-gray-700">
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+            <select id="user-select" onchange="changeUser()" class="bg-transparent text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer max-w-[120px] truncate px-2">
                 <option value="all">🌏 统计全服</option>
             </select>
         </div>
     </div>
 
-    <div id="loading" class="text-center py-32 text-gray-500 dark:text-gray-400">
-        <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-3 drop-shadow-lg"></i>
+    <div id="loading" class="text-center py-32 text-gray-400">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-3"></i>
         <p class="text-sm font-bold tracking-widest animate-pulse">正在生成影视战报...</p>
     </div>
 
@@ -80,14 +52,14 @@
         
         <div class="flex flex-row items-end justify-center gap-3 md:gap-8 px-2" id="podium-section"></div>
 
-        <div class="glass-list rounded-3xl shadow-xl overflow-hidden max-w-4xl mx-auto w-full">
-            <div class="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 flex justify-between items-center backdrop-blur-md">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm md:text-base tracking-wide flex items-center gap-2">
-                    <i class="fa-solid fa-fire-flame-curved text-orange-500"></i> 热播入围名单
+        <div class="bg-white dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden max-w-5xl mx-auto w-full">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/80 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm tracking-wide flex items-center gap-2">
+                    <i class="fa-solid fa-list-ul text-gray-400"></i> 热播入围名单
                 </h3>
-                <span class="text-[10px] md:text-xs font-mono font-bold text-gray-500 dark:text-gray-400 bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded-md">Top 4 - 50</span>
+                <span class="text-xs font-mono font-bold text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-2.5 py-1 rounded-md shadow-sm">Top 4 - 50</span>
             </div>
-            <div id="list-section" class="divide-y divide-gray-200/50 dark:divide-gray-700/50"></div>
+            <div id="list-section" class="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-x-4 p-0 md:p-4 divide-y md:divide-y-0 divide-gray-100 dark:divide-gray-700/50"></div>
         </div>
     </div>
 </div>
@@ -96,7 +68,7 @@
 {% block scripts %}
 <script>
     let state = { user: 'all', category: 'all', sortBy: 'count', period: 'all' };
-    let maxPlayCount = 1; // 用于计算热度条比例
+    let maxPlayCount = 1;
 
     async function init() {
         await loadUsers();
@@ -107,9 +79,9 @@
         state.category = cat;
         document.querySelectorAll('.cat-btn').forEach(btn => {
             if(btn.dataset.cat === cat) {
-                btn.className = "cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white";
+                btn.className = "cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white";
             } else {
-                btn.className = "cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/50";
+                btn.className = "cat-btn px-4 py-1.5 rounded-lg text-xs font-bold transition text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600";
             }
         });
         loadContent();
@@ -141,7 +113,6 @@
         const content = document.getElementById('content-area');
         loading.classList.remove('hidden'); 
         content.classList.add('hidden');
-        document.getElementById('dynamic-backdrop').style.opacity = '0'; // 重置背景
 
         try {
             const url = `/api/stats/top_movies?user_id=${state.user}&category=${state.category}&period=${state.period}&sort_by=${state.sortBy}`;
@@ -150,19 +121,8 @@
             
             if(json.status === 'success' && json.data && json.data.length > 0) {
                 const list = json.data;
-                maxPlayCount = list[0].PlayCount || 1; // 基准热度
-                
-                // 渲染动态模糊背景 (使用第一名的 Backdrop)
-                const backdropUrl = `/api/proxy/smart_image?item_id=${list[0].ItemId}&name=${encodeURIComponent(list[0].ItemName)}&type=Backdrop`;
-                const bgEl = document.getElementById('dynamic-backdrop');
-                bgEl.style.backgroundImage = `url('${backdropUrl}')`;
-                
-                // 预加载背景图确认加载完成后再显示
-                const img = new Image();
-                img.src = backdropUrl;
-                img.onload = () => { bgEl.style.opacity = '1'; };
+                maxPlayCount = list[0].PlayCount || 1;
 
-                // 拆分冠亚季军与其他
                 const top3 = [];
                 if(list[0]) top3.push({...list[0], rank: 1});
                 if(list[1]) top3.push({...list[1], rank: 2});
@@ -175,7 +135,7 @@
                 loading.classList.add('hidden'); 
                 content.classList.remove('hidden');
             } else {
-                loading.innerHTML = `<div class="py-10"><i class="fa-solid fa-ghost text-5xl text-gray-300 dark:text-gray-700 mb-4"></i><p class="text-sm font-bold">该维度下暂无播放记录</p></div>`;
+                loading.innerHTML = `<div class="py-10"><i class="fa-solid fa-ghost text-5xl text-gray-200 dark:text-gray-700 mb-4"></i><p class="text-sm font-bold text-gray-400">该维度下暂无播放记录</p></div>`;
             }
         } catch (e) { 
             console.error(e); 
@@ -188,45 +148,41 @@
         let html = '';
         
         items.forEach(item => {
-            // 🔥 使用最新黑科技：智能防裂图寻亲接口
+            // 🔥 接入三级防御智能图片接口
             const imgUrl = `/api/proxy/smart_image?item_id=${item.ItemId}&name=${encodeURIComponent(item.ItemName)}&type=Primary`;
             
             const isFirst = item.rank === 1;
-            let widthClass = isFirst ? 'w-[38%] md:w-64' : 'w-[28%] md:w-48';
-            let heightClass = isFirst ? 'aspect-[2/3] md:h-96' : 'aspect-[2/3] md:h-[18rem] opacity-90 hover:opacity-100'; 
+            let widthClass = isFirst ? 'w-[36%] md:w-56' : 'w-[28%] md:w-40';
+            let heightClass = isFirst ? 'aspect-[2/3] md:h-80' : 'aspect-[2/3] md:h-60 opacity-90 hover:opacity-100'; 
             let borderClass = `rank-${item.rank}-border`;
             
             let crownHtml = isFirst ? '<i class="fa-solid fa-crown crown-icon"></i>' : '';
             let rankColors = {
-                1: 'from-amber-400 to-yellow-600 shadow-amber-500/50',
-                2: 'from-slate-300 to-gray-500 shadow-slate-500/50 text-gray-800',
-                3: 'from-orange-400 to-amber-700 shadow-orange-500/50'
+                1: 'bg-amber-500 text-white',
+                2: 'bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-200',
+                3: 'bg-orange-600 text-white'
             };
-            let badgeStyle = `bg-gradient-to-r ${rankColors[item.rank]} shadow-lg`;
             
-            // 排序逻辑：2-1-3
             let orderClass = '';
-            if (item.rank === 1) orderClass = 'order-2 z-20 -mx-2 md:-mx-4 mb-2 md:mb-4'; 
+            if (item.rank === 1) orderClass = 'order-2 z-20 -mx-1 md:-mx-2 mb-1 md:mb-2'; 
             if (item.rank === 2) orderClass = 'order-1 z-10';       
             if (item.rank === 3) orderClass = 'order-3 z-10';       
 
             html += `
-            <div class="podium-card relative flex flex-col items-center group shrink-0 ${orderClass} ${widthClass} cursor-pointer">
+            <div class="podium-card relative flex flex-col items-center group shrink-0 ${orderClass} ${widthClass}">
                 ${crownHtml}
-                <div class="relative w-full rounded-2xl overflow-hidden ${borderClass} ${heightClass} bg-gray-200 dark:bg-gray-800 shadow-2xl">
-                    <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700 ease-out" loading="lazy">
+                <div class="relative w-full rounded-2xl overflow-hidden ${borderClass} ${heightClass} bg-gray-100 dark:bg-gray-800 shadow-xl">
+                    <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" loading="lazy">
                     
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90"></div>
                     
-                    <div class="absolute bottom-0 left-0 right-0 p-3 md:p-5 text-center transform translate-y-1 group-hover:translate-y-0 transition-transform">
-                        <div class="inline-block ${badgeStyle} text-white text-[10px] md:text-sm font-black px-2 md:px-3 py-0.5 rounded-md mb-1.5 md:mb-2">
-                            TOP ${item.rank}
+                    <div class="absolute bottom-0 left-0 right-0 p-3 md:p-4 text-center">
+                        <div class="inline-block ${rankColors[item.rank]} text-[10px] md:text-xs font-black px-2 py-0.5 rounded shadow-sm mb-1.5">
+                            #${item.rank}
                         </div>
-                        <h3 class="text-white font-bold text-xs md:text-xl line-clamp-2 leading-tight drop-shadow-md tracking-wide mb-1">${item.ItemName}</h3>
-                        <div class="flex items-center justify-center gap-2 text-gray-300 text-[9px] md:text-xs font-mono opacity-80 mt-1">
-                            <span><i class="fa-solid fa-play text-[8px] md:text-[10px] mr-1"></i>${item.PlayCount} 次</span>
-                            <span class="hidden md:inline text-white/30">|</span>
-                            <span class="hidden md:inline"><i class="fa-regular fa-clock mr-1"></i>${Math.round(item.TotalTime/60)} min</span>
+                        <h3 class="text-white font-bold text-xs md:text-base line-clamp-2 leading-tight drop-shadow-md mb-1">${item.ItemName}</h3>
+                        <div class="flex items-center justify-center gap-2 text-gray-300 text-[10px] font-mono">
+                            <span>${item.PlayCount} 次</span>
                         </div>
                     </div>
                 </div>
@@ -238,47 +194,41 @@
     function renderList(items) {
         const container = document.getElementById('list-section');
         if(items.length === 0) { 
-            container.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm font-medium">没有更多候选数据了</div>'; 
+            container.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm md:col-span-2">无更多数据</div>'; 
             return; 
         }
 
         let html = '';
         items.forEach((item, index) => {
             const rank = index + 4;
-            // 🔥 智能兜底接口
             const imgUrl = `/api/proxy/smart_image?item_id=${item.ItemId}&name=${encodeURIComponent(item.ItemName)}&type=Primary`;
-            
-            // 计算热度百分比 (最高不超过100%)
             const percent = Math.min((item.PlayCount / maxPlayCount) * 100, 100);
 
             html += `
-            <div class="relative flex items-center p-3 md:p-4 hover:bg-white/60 dark:hover:bg-gray-700/60 transition-all group cursor-default overflow-hidden">
-                <div class="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-20 group-hover:opacity-50 transition-opacity" style="width: ${percent}%;"></div>
+            <div class="relative flex items-center p-3 md:p-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group cursor-default md:rounded-2xl md:border md:border-transparent md:hover:border-gray-200 md:dark:hover:border-gray-600">
                 
-                <div class="w-8 md:w-10 text-center font-black text-gray-400/50 dark:text-gray-600/50 text-base md:text-xl mr-2 md:mr-4 italic group-hover:text-indigo-500 transition-colors">
+                <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-500/30 dark:bg-indigo-500/50 group-hover:bg-indigo-500 transition-colors" style="width: ${percent}%;"></div>
+                
+                <div class="w-8 text-center font-bold text-gray-400/70 dark:text-gray-500 text-sm md:text-lg mr-2 md:mr-3 italic group-hover:text-indigo-500 transition-colors">
                     ${rank}
                 </div>
                 
-                <div class="w-10 h-14 md:w-14 md:h-20 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden shrink-0 mr-4 shadow-sm relative group-hover:shadow-md transition-shadow">
-                     <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy">
+                <div class="w-10 h-14 md:w-12 md:h-16 rounded-md bg-gray-200 dark:bg-gray-800 overflow-hidden shrink-0 mr-3 shadow-sm border border-gray-100 dark:border-gray-700">
+                     <img src="${imgUrl}" class="w-full h-full object-cover" loading="lazy">
                 </div>
                 
-                <div class="flex-1 min-w-0 pr-4">
-                    <h4 class="text-sm md:text-base font-bold text-gray-800 dark:text-gray-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                <div class="flex-1 min-w-0 pr-2">
+                    <h4 class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
                         ${item.ItemName}
                     </h4>
                     <div class="flex items-center gap-3 text-[10px] md:text-xs text-gray-500 dark:text-gray-400 font-mono">
-                        <span class="flex items-center gap-1 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-md">
-                            <i class="fa-solid fa-fire text-orange-500/80"></i> ${item.PlayCount}
+                        <span class="flex items-center gap-1">
+                            <i class="fa-solid fa-play text-[9px]"></i> ${item.PlayCount}
                         </span>
-                        <span class="flex items-center gap-1 opacity-80">
-                            <i class="fa-regular fa-clock"></i> ${Math.round(item.TotalTime/60)} 分钟
+                        <span class="flex items-center gap-1 opacity-70">
+                            <i class="fa-regular fa-clock text-[10px]"></i> ${Math.round(item.TotalTime/60)}m
                         </span>
                     </div>
-                </div>
-                
-                <div class="pr-2 opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300">
-                    <i class="fa-regular fa-circle-play text-2xl text-indigo-500/50 hover:text-indigo-500 cursor-pointer"></i>
                 </div>
             </div>`;
         });

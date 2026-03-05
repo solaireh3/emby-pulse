@@ -3,6 +3,7 @@ from typing import Optional
 from app.core.config import cfg
 from app.core.database import query_db, get_base_filter
 import requests
+import re
 
 router = APIRouter()
 
@@ -199,31 +200,49 @@ def api_live_sessions():
 def api_live_sessions_legacy():
     return api_live_sessions()
 
+def get_clean_name(item_name, item_type):
+    """
+    🧹 智能清洗函数：确保剧集聚合到“季”，电影保持原样，彻底抹除“集”
+    """
+    if item_type != 'Episode':
+        return item_name.split(' - ')[0]
+
+    # 1. 尝试按标准的 ' - ' 分割
+    parts = [p.strip() for p in item_name.split(' - ')]
+    
+    # 情况 A: 标准三段式 "剧名 - 第 1 季 - 第 1 集" -> 取前两段
+    if len(parts) >= 3:
+        return f"{parts[0]} - {parts[1]}"
+    
+    # 情况 B: 两段式 "剧名 - 第 1 集" 或 "剧名 - 第 1 季"
+    if len(parts) == 2:
+        # 检查第二段是否包含“季”或“Season”或“S01”等关键字
+        if re.search(r'第.*季|Season\s*\d+|S\d+', parts[1], re.I):
+            return f"{parts[0]} - {parts[1]}"
+        else:
+            # 如果第二段只有集信息，则只取剧名
+            return parts[0]
+            
+    # 情况 C: 没用破折号，全连在一起 "破事精英第二季第1集"
+    # 使用正则匹配并切断“集”之后的所有内容
+    clean = re.sub(r'(第?\s*\d+\s*[集话回期]|Episode\s*\d+|E\d+|EP\d+).*', '', item_name, flags=re.I).strip()
+    return clean
+
 @router.get("/api/stats/top_movies")
 def api_top_movies(user_id: Optional[str] = None, category: str = 'all', sort_by: str = 'count'):
-    """
-    🔥 优化版：按【剧名 - 季】聚合，严禁分集展示
-    """
     try:
         where, params = get_base_filter(user_id)
         if category == 'Movie': where += " AND ItemType = 'Movie'"
         elif category == 'Episode': where += " AND ItemType = 'Episode'"
         
-        sql = f"SELECT ItemName, ItemId, ItemType, PlayDuration FROM PlaybackActivity {where} LIMIT 5000"
+        sql = f"SELECT ItemName, ItemId, ItemType, PlayDuration FROM PlaybackActivity {where} LIMIT 8000"
         rows = query_db(sql, params)
         
         aggregated = {}
         for row in rows:
-            # 核心清洗：只要前两段（剧名和季名），扔掉第三段（集名）
-            parts = row['ItemName'].split(' - ')
-            if len(parts) >= 2:
-                # 结果如： "唐朝诡事录 - 第 2 季"
-                clean = f"{parts[0]} - {parts[1]}"
-            else:
-                # 电影或命名不规范的剧集
-                clean = parts[0]
+            # 🔥 调用智能清洗
+            clean = get_clean_name(row['ItemName'], row['ItemType'])
                 
-            # 聚合统计：只要 clean 名称相同，就累加到同一个 key 里
             if clean not in aggregated: 
                 aggregated[clean] = {'ItemName': clean, 'ItemId': row['ItemId'], 'PlayCount': 0, 'TotalTime': 0}
             
@@ -237,13 +256,10 @@ def api_top_movies(user_id: Optional[str] = None, category: str = 'all', sort_by
 
 @router.get("/api/stats/user_details")
 def api_user_details(user_id: Optional[str] = None):
-    """
-    🔥 用户画像：最爱影片聚合修复
-    """
     try:
         where, params = get_base_filter(user_id)
         
-        # 1. 小时、设备、日志查询 (保持不变)
+        # 小时分布、设备、日志 (保持原样)
         h_res = query_db(f"SELECT strftime('%H', DateCreated) as Hour, COUNT(*) as Plays FROM PlaybackActivity {where} GROUP BY Hour", params)
         h_data = {str(i).zfill(2): 0 for i in range(24)}
         if h_res:
@@ -256,11 +272,10 @@ def api_user_details(user_id: Optional[str] = None):
             for r in l_res: 
                 l = dict(r); l['UserName'] = u_map.get(l['UserId'], "User"); logs.append(l)
 
-        # 2. 核心画像数据统计
+        # 画像数据
         overview = {"total_plays": 0, "total_duration": 0, "avg_duration": 0, "account_age_days": 1}
         pref = {"movie_plays": 0, "episode_plays": 0}
         
-        # 统计总览
         ov_res = query_db(f"SELECT COUNT(*) as Plays, SUM(PlayDuration) as Dur, MIN(DateCreated) as FirstDate FROM PlaybackActivity {where}", params)
         if ov_res and ov_res[0]['Plays']:
             overview['total_plays'] = ov_res[0]['Plays']
@@ -273,19 +288,17 @@ def api_user_details(user_id: Optional[str] = None):
                     overview['account_age_days'] = max(1, (datetime.datetime.now() - fd).days)
                 except: pass
 
-        # 3. 🔥 精准聚合最爱影片 (按季合并)
-        raw_fav = query_db(f"SELECT ItemName, ItemId, PlayDuration FROM PlaybackActivity {where}", params)
+        # 🔥 聚合最爱影片 (应用智能清洗)
+        raw_fav = query_db(f"SELECT ItemName, ItemId, ItemType, PlayDuration FROM PlaybackActivity {where}", params)
         agg_fav = {}
         for r in raw_fav:
-            parts = r['ItemName'].split(' - ')
-            clean = f"{parts[0]} - {parts[1]}" if len(parts) >= 2 else parts[0]
+            clean = get_clean_name(r['ItemName'], r['ItemType'])
             if clean not in agg_fav: agg_fav[clean] = {"ItemName": clean, "ItemId": r["ItemId"], "c": 0, "d": 0}
             agg_fav[clean]["c"] += 1
             agg_fav[clean]["d"] += (r["PlayDuration"] or 0)
         
         top_fav = max(agg_fav.values(), key=lambda x: x['d']) if agg_fav else None
         
-        # 偏好统计
         m_res = query_db(f"SELECT ItemType, COUNT(*) as c FROM PlaybackActivity {where} GROUP BY ItemType", params)
         if m_res:
             for m in m_res:
@@ -322,16 +335,13 @@ def api_chart_stats(user_id: Optional[str] = None, dimension: str = 'day'):
 
 @router.get("/api/stats/poster_data")
 def api_poster_data(user_id: Optional[str] = None, period: str = 'all'):
-    """
-    🔥 年度报告数据：同步分季聚合逻辑
-    """
     try:
         where_base, params = get_base_filter(user_id)
         date_filter = ""
         if period == 'week': date_filter = " AND DateCreated > date('now', '-7 days')"
         elif period == 'month': date_filter = " AND DateCreated > date('now', '-30 days')"
         
-        raw_sql = f"SELECT ItemName, ItemId, PlayDuration FROM PlaybackActivity {where_base + date_filter}"
+        raw_sql = f"SELECT ItemName, ItemId, ItemType, PlayDuration FROM PlaybackActivity {where_base + date_filter}"
         rows = query_db(raw_sql, params)
         
         total_plays = 0; total_duration = 0; aggregated = {} 
@@ -339,9 +349,8 @@ def api_poster_data(user_id: Optional[str] = None, period: str = 'all'):
             for row in rows:
                 total_plays += 1; dur = row['PlayDuration'] or 0; total_duration += dur
                 
-                # 同样的清洗逻辑
-                parts = row['ItemName'].split(' - ')
-                clean = f"{parts[0]} - {parts[1]}" if len(parts) >= 2 else parts[0]
+                # 🔥 调用智能清洗
+                clean = get_clean_name(row['ItemName'], row['ItemType'])
                 
                 if clean not in aggregated: 
                     aggregated[clean] = {'ItemName': clean, 'ItemId': row['ItemId'], 'Count': 0, 'Duration': 0}

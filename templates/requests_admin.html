@@ -22,7 +22,7 @@
             <div class="w-12 h-12 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center justify-center text-2xl text-red-500">🍿</div>
             <div>
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white">资源求片大厅</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">多季度精准管理 · 批量审批入库</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">多渠道精准接单 · 全场景闭环审批</p>
             </div>
         </div>
         <div class="flex items-center gap-3 w-full sm:w-auto">
@@ -39,14 +39,16 @@
         <div class="flex gap-2 overflow-x-auto hide-scrollbar w-full md:w-auto pl-2">
             <button @click="filterStatus = 'all'" :class="filterStatus === 'all' ? 'bg-gray-800 text-white dark:bg-white dark:text-gray-900 shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">全部</button>
             <button @click="filterStatus = 0" :class="filterStatus === 0 ? 'bg-blue-600 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">待审批 <span x-text="requests.filter(r => r.status===0).length" class="ml-1 opacity-70"></span></button>
-            <button @click="filterStatus = 1" :class="filterStatus === 1 ? 'bg-yellow-500 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">下载中</button>
+            <button @click="filterStatus = 1" :class="filterStatus === 1 ? 'bg-yellow-500 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">自动化下载中</button>
+            <button @click="filterStatus = 4" :class="filterStatus === 4 ? 'bg-purple-500 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">手动入库中</button>
             <button @click="filterStatus = 2" :class="filterStatus === 2 ? 'bg-green-600 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">已入库</button>
             <button @click="filterStatus = 3" :class="filterStatus === 3 ? 'bg-red-500 text-white shadow-md' : 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'" class="px-4 py-2 rounded-full text-sm font-bold transition whitespace-nowrap">已拒绝</button>
         </div>
         
         <div x-show="selectedKeys.length > 0" x-transition class="flex items-center gap-2 pr-2">
             <span class="text-sm font-bold text-blue-600 dark:text-blue-400 mr-2">已选 <span x-text="selectedKeys.length"></span> 项</span>
-            <button @click="batchAction('approve')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-sm active:scale-95"><i class="fa-solid fa-check mr-1"></i>批量推送</button>
+            <button @click="batchAction('approve')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-sm active:scale-95" title="推送给 MP 下载"><i class="fa-solid fa-robot mr-1"></i>批量推MP</button>
+            <button @click="batchAction('manual')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition shadow-sm active:scale-95" title="不推送给 MP，自己找资源下载"><i class="fa-solid fa-hand mr-1"></i>批量接单</button>
             <button @click="openBatchRejectModal()" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 rounded-lg text-xs font-bold transition active:scale-95"><i class="fa-solid fa-ban mr-1"></i>批量拒绝</button>
             <button @click="batchAction('delete')" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold transition active:scale-95"><i class="fa-regular fa-trash-can"></i></button>
         </div>
@@ -84,7 +86,8 @@
                             </div>
                             <div class="shrink-0">
                                 <span x-show="item.status === 0" class="text-blue-500 text-[11px] font-bold bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-500/20">待审批</span>
-                                <span x-show="item.status === 1" class="text-yellow-600 dark:text-yellow-500 text-[11px] font-bold bg-yellow-50 dark:bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-100 dark:border-yellow-500/20 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>下载中</span>
+                                <span x-show="item.status === 1" class="text-yellow-600 dark:text-yellow-500 text-[11px] font-bold bg-yellow-50 dark:bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-100 dark:border-yellow-500/20 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>自动下载中</span>
+                                <span x-show="item.status === 4" class="text-purple-600 dark:text-purple-500 text-[11px] font-bold bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-100 dark:border-purple-500/20 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>手动入库中</span>
                                 <span x-show="item.status === 2" class="text-green-600 dark:text-green-500 text-[11px] font-bold bg-green-50 dark:bg-green-500/10 px-2 py-0.5 rounded-full border border-green-100 dark:border-green-500/20">已入库</span>
                                 <span x-show="item.status === 3" class="text-red-500 text-[11px] font-bold bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded-full border border-red-100 dark:border-red-500/20">已拒绝</span>
                             </div>
@@ -106,12 +109,15 @@
                         <div class="text-[10px] text-gray-400 font-mono" x-text="item.created_at.substring(5, 16)"></div>
                         <div class="flex items-center gap-2">
                             <template x-if="item.status === 0">
-                                <button @click="doAction(item.tmdb_id, item.season, 'approve')" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-blue-500/20 active:scale-95">推送下载</button>
+                                <div class="flex items-center gap-2">
+                                    <button @click="doAction(item.tmdb_id, item.season, 'approve')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-blue-500/20 active:scale-95"><i class="fa-solid fa-robot mr-1"></i>推给 MP</button>
+                                    <button @click="doAction(item.tmdb_id, item.season, 'manual')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-purple-500/20 active:scale-95"><i class="fa-solid fa-hand mr-1"></i>手动接单</button>
+                                </div>
                             </template>
-                            <template x-if="item.status === 1">
-                                <button @click="doAction(item.tmdb_id, item.season, 'finish')" class="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-green-500/20 active:scale-95">标记入库</button>
+                            <template x-if="item.status === 1 || item.status === 4">
+                                <button @click="doAction(item.tmdb_id, item.season, 'finish')" class="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-green-500/20 active:scale-95"><i class="fa-solid fa-check mr-1"></i>标记已入库</button>
                             </template>
-                            <template x-if="item.status === 0 || item.status === 1">
+                            <template x-if="item.status === 0 || item.status === 1 || item.status === 4">
                                 <button @click="openRejectModal([{tmdb_id: item.tmdb_id, season: item.season}])" class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition" title="拒绝">
                                     <i class="fa-solid fa-circle-xmark"></i>
                                 </button>
@@ -183,7 +189,7 @@
             filterStatus: 'all',
             isOperating: false,
             toast: { show: false, message: '', type: 'success' },
-            selectedKeys: [], // 存储已选的复选框值 (格式 "123_1")
+            selectedKeys: [], 
             
             rejectModal: { open: false, items: [], reasonType: '未找到可用资源', customReason: '' },
             predefinedReasons: ['影片未上映', '剧集未开播', '未找到可用资源', '质量太差等待洗版', '其他原因...'],
@@ -209,7 +215,6 @@
                     const data = await res.json();
                     if (data.status === 'success') {
                         this.requests = data.data;
-                        // 过滤掉已经不存在的 selectedKeys
                         const currentKeys = this.requests.map(r => r.tmdb_id + '_' + r.season);
                         this.selectedKeys = this.selectedKeys.filter(k => currentKeys.includes(k));
                     }
@@ -224,7 +229,6 @@
                 }
             },
 
-            // 将 "123_1" 转为对象数组
             _getKeysAsObjects() {
                 return this.selectedKeys.map(k => {
                     const parts = k.split('_');
@@ -254,7 +258,6 @@
             async doAction(id, season, action) {
                 this.isOperating = true;
                 try {
-                    // 单体操作直接复用 batch 接口
                     const res = await fetch('/api/manage/requests/batch', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -293,7 +296,7 @@
                     const data = await res.json();
                     this.showToast(data.message, data.status === 'success' ? 'success' : 'error');
                     this.rejectModal.open = false;
-                    this.selectedKeys = []; // 拒绝成功后清空选项
+                    this.selectedKeys = []; 
                     this.loadData();
                 } finally { this.isOperating = false; }
             }

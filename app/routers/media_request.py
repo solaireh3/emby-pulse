@@ -16,7 +16,6 @@ router = APIRouter()
 def ensure_db_schema():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # 确保旧的 media_requests 表结构正确
     c.execute("PRAGMA table_info(media_requests)")
     cols = c.fetchall()
     if cols:
@@ -49,7 +48,6 @@ def ensure_db_schema():
             c.execute("INSERT OR IGNORE INTO request_users (tmdb_id, user_id, username, season) SELECT tmdb_id, user_id, COALESCE(username, '系统用户'), COALESCE(season, 0) FROM request_users_old")
             c.execute("DROP TABLE request_users_old")
 
-    # 🔥 新增：资源报错反馈表
     c.execute("""
         CREATE TABLE IF NOT EXISTS media_feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,7 +128,7 @@ class FeedbackSubmitModel(BaseModel):
 
 class FeedbackActionModel(BaseModel):
     id: int
-    action: str # 'fix', 'done', 'reject'
+    action: str
 
 @router.post("/api/requests/auth")
 def request_system_login(data: RequestLoginModel, request: Request):
@@ -332,24 +330,69 @@ def batch_manage_action(data: BulkAdminActionModel, request: Request):
 def manage_request_action(data: AdminActionModel, request: Request):
     return batch_manage_action(BulkAdminActionModel(items=[{"tmdb_id": data.tmdb_id, "season": data.season}], action=data.action, reject_reason=data.reject_reason), request)
 
-# ================= 🔥 新增：资源报错反馈 API =================
 
+# ================= 🔥 恢复：后台铃铛与悬浮通知核心引擎 =================
+@router.get("/api/requests/pending_notify")
+def get_pending_notify(request: Request):
+    if not request.session.get("user"): return {"status": "error"}
+    try:
+        conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; c = conn.cursor()
+        
+        # 1. 获取新求片
+        c.execute("SELECT COUNT(*) as cnt FROM media_requests WHERE status = 0")
+        req_count = (c.fetchone() or {'cnt': 0})['cnt']
+        
+        c.execute("SELECT m.tmdb_id, m.media_type, m.title, m.poster_path, m.season, m.created_at, GROUP_CONCAT(COALESCE(r.username, '未知用户'), ', ') as users FROM media_requests m LEFT JOIN request_users r ON m.tmdb_id = r.tmdb_id AND m.season = r.season WHERE m.status = 0 GROUP BY m.tmdb_id, m.season ORDER BY m.created_at DESC LIMIT 5")
+        req_rows = c.fetchall()
+
+        # 2. 获取新报错反馈
+        c.execute("SELECT COUNT(*) as cnt FROM media_feedback WHERE status = 0")
+        feed_count = (c.fetchone() or {'cnt': 0})['cnt']
+        
+        c.execute("SELECT id, item_name, username, issue_type, created_at FROM media_feedback WHERE status = 0 ORDER BY created_at DESC LIMIT 5")
+        feed_rows = c.fetchall()
+        
+        conn.close()
+        
+        items = []
+        for r in req_rows:
+            items.append({
+                "id": f"req_{r['tmdb_id']}_{r['season']}", 
+                "title": r['title'] + (f" (第{r['season']}季)" if r['media_type'] == 'tv' else ""), 
+                "poster": r['poster_path'], 
+                "users": r['users'], 
+                "time": r['created_at']
+            })
+            
+        for f in feed_rows:
+            items.append({
+                "id": f"feed_{f['id']}",
+                "title": f"⚠️ 报错: {f['item_name']}",
+                "poster": "", 
+                "users": f"{f['username']} - {f['issue_type']}",
+                "time": f['created_at']
+            })
+            
+        # 按时间融合排序，永远展示最新动态
+        items.sort(key=lambda x: x['time'], reverse=True)
+        
+        return {"status": "success", "count": req_count + feed_count, "items": items[:5]}
+    except Exception as e: return {"status": "error", "message": str(e)}
+
+
+# ================= 资源报错反馈 API =================
 @router.post("/api/requests/feedback/submit")
 def submit_feedback(data: FeedbackSubmitModel, request: Request):
     user = request.session.get("req_user")
     if not user: return {"status": "error", "message": "请重新登录"}
-    
-    uid = str(user.get("Id", ""))
-    uname = user.get("Name") or "未知用户"
+    uid = str(user.get("Id", "")); uname = user.get("Name") or "未知用户"
     
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
     c.execute("INSERT INTO media_feedback (item_name, user_id, username, issue_type, description) VALUES (?, ?, ?, ?, ?)",
               (data.item_name, uid, uname, data.issue_type, data.description))
     feed_id = c.lastrowid
-    conn.commit()
-    conn.close()
+    conn.commit(); conn.close()
     
-    # 推送机器人通知并附带处理按钮
     msg = (f"🚨 <b>新资源报错提醒</b>\n\n"
            f"👤 <b>用户</b>：{uname}\n"
            f"🎬 <b>媒体</b>：{data.item_name}\n"
@@ -363,7 +406,6 @@ def submit_feedback(data: FeedbackSubmitModel, request: Request):
         [{"text": "❌ 暂不处理(忽略)", "callback_data": f"feed_reject_{feed_id}"},
          {"text": "💻 网页处理", "url": f"{admin_url}/requests_admin"}]
     ]}
-    
     bot.send_message("sys_notify", msg, reply_markup=keyboard, platform="all")
     return {"status": "success", "message": "反馈已提交，感谢您的协助！"}
 
@@ -374,9 +416,7 @@ def get_my_feedback(request: Request):
     uid = str(user.get("Id", ""))
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
     c.execute("SELECT id, item_name, issue_type, description, status, created_at FROM media_feedback WHERE user_id = ? ORDER BY created_at DESC", (uid,))
-    rows = c.fetchall()
-    conn.close()
-    
+    rows = c.fetchall(); conn.close()
     results = [{"id": r[0], "item_name": r[1], "issue_type": r[2], "description": r[3], "status": r[4], "created_at": r[5]} for r in rows]
     return {"status": "success", "data": results}
 
@@ -385,9 +425,7 @@ def get_all_feedback(request: Request):
     if not request.session.get("user"): return {"status": "error"}
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
     c.execute("SELECT id, item_name, username, issue_type, description, status, created_at FROM media_feedback ORDER BY status ASC, created_at DESC")
-    rows = c.fetchall()
-    conn.close()
-    
+    rows = c.fetchall(); conn.close()
     results = [{"id": r[0], "item_name": r[1], "username": r[2], "issue_type": r[3], "description": r[4], "status": r[5], "created_at": r[6]} for r in rows]
     return {"status": "success", "data": results}
 
@@ -396,12 +434,8 @@ def manage_feedback_action(data: FeedbackActionModel, request: Request):
     if not request.session.get("user"): return {"status": "error"}
     status_map = {"fix": 1, "done": 2, "reject": 3, "delete": -1}
     st = status_map.get(data.action, 0)
-    
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-    if st == -1:
-        c.execute("DELETE FROM media_feedback WHERE id = ?", (data.id,))
-    else:
-        c.execute("UPDATE media_feedback SET status = ? WHERE id = ?", (st, data.id))
-    conn.commit()
-    conn.close()
+    if st == -1: c.execute("DELETE FROM media_feedback WHERE id = ?", (data.id,))
+    else: c.execute("UPDATE media_feedback SET status = ? WHERE id = ?", (st, data.id))
+    conn.commit(); conn.close()
     return {"status": "success", "message": "已更新工单状态"}

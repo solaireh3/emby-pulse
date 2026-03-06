@@ -58,6 +58,12 @@ class TelegramBot:
         proxy = cfg.get("proxy_url")
         return {"http": proxy, "https": proxy} if proxy else None
 
+    # 🔥 核心修复：这个就是被我误删的入库队列函数，现在补回来了！
+    def add_library_task(self, item):
+        with self.library_lock:
+            if not any(x.get('Id') == item.get('Id') for x in self.library_queue):
+                self.library_queue.append(item)
+
     def _auto_finish_request(self, tmdb_id):
         if not tmdb_id: return
         try:
@@ -253,7 +259,6 @@ class TelegramBot:
             if tg_cid:
                 try:
                     data = {"chat_id": tg_cid, "caption": caption, "parse_mode": parse_mode}
-                    # 只有在这里使用 json.dumps，因为发送附件必须用 multipart/form-data，字段需要被强制转字符串
                     if reply_markup: data["reply_markup"] = json.dumps(reply_markup)
                     if photo_bytes: requests.post(f"https://api.telegram.org/bot{cfg.get('tg_bot_token')}/sendPhoto", data=data, files={"photo": ("image.jpg", io.BytesIO(photo_bytes), "image/jpeg")}, proxies=self._get_proxies(), timeout=20)
                     else: self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
@@ -268,11 +273,11 @@ class TelegramBot:
             if tg_cid:
                 try:
                     data = {"chat_id": tg_cid, "text": text, "parse_mode": parse_mode}
-                    if reply_markup: data["reply_markup"] = reply_markup # 修复：直接传字典
+                    if reply_markup: data["reply_markup"] = reply_markup
                     requests.post(f"https://api.telegram.org/bot{cfg.get('tg_bot_token')}/sendMessage", json=data, proxies=self._get_proxies(), timeout=10)
                 except: pass
 
-    # ================= 🚀 交互式回调与轮询引擎 (已修复序列化Bug与代理) =================
+    # ================= 🚀 交互式回调与轮询引擎 =================
     
     def _polling_loop(self):
         token = cfg.get("tg_bot_token"); admin_id = str(cfg.get("tg_chat_id"))
@@ -297,7 +302,7 @@ class TelegramBot:
     def _handle_callback(self, cq):
         data = cq.get("data", ""); cid = str(cq["message"]["chat"]["id"])
         mid = cq["message"]["message_id"]; cq_id = cq["id"]; token = cfg.get("tg_bot_token")
-        proxies = self._get_proxies() # 🔥 修复1：补全全局代理
+        proxies = self._get_proxies() 
         
         try: requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cq_id}, proxies=proxies, timeout=5)
         except: pass
@@ -315,7 +320,6 @@ class TelegramBot:
                     [{"text": reasons[2], "callback_data": f"req_reject_do_{tid}_2"}, {"text": reasons[3], "callback_data": f"req_reject_do_{tid}_3"}],
                     [{"text": "🔙 取消返回", "callback_data": f"req_back_{tid}"}]
                 ]}
-                # 🔥 修复2：取消 json.dumps(keyboard)，在 JSON payload 中必须传递原生的 Python 字典！
                 try: requests.post(f"https://api.telegram.org/bot{token}/editMessageReplyMarkup", json={"chat_id": cid, "message_id": mid, "reply_markup": keyboard}, proxies=proxies, timeout=5)
                 except: pass
                 return
@@ -376,7 +380,6 @@ class TelegramBot:
             orig_caption = cq["message"].get("caption", "求片请求")
             operator = cq.get('from', {}).get('first_name', 'Admin')
             new_caption = f"{orig_caption}\n\n━━━━━━━━━━━━━━\n{action_text}\n(操作人: {operator})"
-            # 🔥 这里同样改为传字典
             try: requests.post(f"https://api.telegram.org/bot{token}/editMessageCaption", json={"chat_id": cid, "message_id": mid, "caption": new_caption, "reply_markup": {"inline_keyboard": []}}, proxies=proxies, timeout=5)
             except: pass
 

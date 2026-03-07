@@ -5,10 +5,10 @@ import concurrent.futures
 from datetime import datetime
 from pydantic import BaseModel
 import time
+import urllib.parse
 
 from app.core.config import cfg
 from app.core.database import query_db
-# 🔥 导入 Emby 路由生成器
 from app.routers.search import get_emby_sys_info, is_new_emby_router
 
 router = APIRouter(prefix="/api/gaps", tags=["gaps"])
@@ -50,7 +50,7 @@ def get_admin_user_id():
     return None
 
 # ----------------- 线程池打工人任务 -----------------
-def process_single_series(series, lock_map, host, key, tmdb_key, proxies, today, global_inventory):
+def process_single_series(series, lock_map, host, key, tmdb_key, proxies, today, global_inventory, server_id, use_new_route):
     series_id = series.get("Id")
     series_name = series.get("Name", "未知剧集")
     tmdb_id = series.get("ProviderIds", {}).get("Tmdb")
@@ -59,7 +59,6 @@ def process_single_series(series, lock_map, host, key, tmdb_key, proxies, today,
         update_progress(series_name)
         return None
 
-    # 🔥 检查是否被“全剧忽略”
     if lock_map.get(f"{series_id}_-1_-1", 0) == 1:
         update_progress(series_name)
         return None
@@ -113,14 +112,12 @@ def process_single_series(series, lock_map, host, key, tmdb_key, proxies, today,
     update_progress(series_name) 
     
     if series_gaps:
-        # 🔥 生成 Emby 跳转链接和代理海报
-        sys_info = get_emby_sys_info(host, key)
-        use_new_route = is_new_emby_router(sys_info)
         public_host = cfg.get("emby_public_url") or cfg.get("emby_external_url") or cfg.get("emby_public_host") or host
         public_host = public_host.rstrip('/')
 
-        emby_url = f"{public_host}/web/index.html#!/item?id={series_id}" if use_new_route else f"{public_host}/web/index.html#!/item/details.html?id={series_id}"
-        poster_url = f"/api/library/image/{series_id}?type=Primary&width=400"
+        # 🔥 修复 Emby 跳转白屏问题，强制拼接 ServerId
+        emby_url = f"{public_host}/web/index.html#!/item?id={series_id}&serverId={server_id}" if use_new_route else f"{public_host}/web/index.html#!/item/details.html?id={series_id}&serverId={server_id}"
+        poster_url = f"/api/library/image/{series_id}?type=Primary&width=300"
 
         return {
             "series_id": series_id,
@@ -146,6 +143,15 @@ def run_scan_task():
         admin_id = get_admin_user_id()
         today = datetime.now().strftime("%Y-%m-%d")
         proxies = _get_proxies()
+
+        # 🔥 只获取一次 ServerId，不消耗多线程性能
+        try:
+            sys_info = requests.get(f"{host}/emby/System/Info/Public", timeout=5).json()
+            server_id = sys_info.get("Id", "")
+            use_new_route = is_new_emby_router(sys_info)
+        except:
+            server_id = ""
+            use_new_route = True
 
         query_db('''
             CREATE TABLE IF NOT EXISTS gap_perfect_series (
@@ -192,7 +198,7 @@ def run_scan_task():
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
             for series in pending_series:
-                futures.append(executor.submit(process_single_series, series, lock_map, host, key, tmdb_key, proxies, today, global_inventory))
+                futures.append(executor.submit(process_single_series, series, lock_map, host, key, tmdb_key, proxies, today, global_inventory, server_id, use_new_route))
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
                 if res: results.append(res)
@@ -283,24 +289,24 @@ def search_mp_for_gap(req: GapSearchReq):
                     if "HDR" in video.get("VideoRange", "") or "HDR" in d_title: genes.append("HDR")
                     if "DOVI" in d_title or "DOLBY VISION" in d_title: genes.append("DoVi")
         except: pass
-    if not genes: genes = ["无特殊基因"]
+    if not genes: genes = ["默认基因 (无明显特效)"]
     
     keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episode).zfill(2)}"
     clean_token = mp_token.strip().strip("'\"")
     headers = {"X-API-KEY": clean_token, "Authorization": f"Bearer {clean_token}"}
     
     try:
-        # 🔥 修复 403 报错：使用 params 传递 keyword 确保 URL 空格被正确转义
-        mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search/title"
-        mp_res = requests.get(mp_search_url, params={"keyword": keyword}, headers=headers, timeout=20)
+        # 🔥 终极修复 MP 403 问题：手动采用安全的 URL 编码，避免 requests 把空格变成 + 号
+        encoded_keyword = urllib.parse.quote(keyword)
+        mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={encoded_keyword}"
+        mp_res = requests.get(mp_search_url, headers=headers, timeout=20)
         
-        # 兼容老版本 MP API
         if mp_res.status_code == 404:
-            mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search"
-            mp_res = requests.get(mp_search_url, params={"keyword": keyword}, headers=headers, timeout=20)
+            mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search?keyword={encoded_keyword}"
+            mp_res = requests.get(mp_search_url, headers=headers, timeout=20)
             
         if mp_res.status_code != 200:
-            return {"status": "error", "message": f"MP搜索失败 (HTTP {mp_res.status_code})"}
+            return {"status": "error", "message": f"被 MoviePilot 拦截或搜索失败 (HTTP {mp_res.status_code})"}
             
         results = mp_res.json()
         for r in results:

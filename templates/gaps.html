@@ -18,9 +18,9 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="gapManager()" x-init="init()" class="max-w-7xl mx-auto space-y-4 sm:space-y-6 px-1 sm:px-4 md:px-8 py-4 sm:py-6 pb-24">
+<div x-data="gapManager()" x-init="init()" class="max-w-7xl mx-auto space-y-4 sm:space-y-6 px-2 sm:px-4 md:px-8 py-4 sm:py-6 pb-24">
 
-    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 shadow-sm border border-gray-100 dark:border-gray-700 w-full">
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm border border-gray-100 dark:border-gray-700 w-full">
         
         <div class="flex items-center gap-3 w-full md:w-auto">
             <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center relative overflow-hidden border border-indigo-100 dark:border-indigo-800 shrink-0">
@@ -29,12 +29,12 @@
             </div>
             <div>
                 <h2 class="text-lg sm:text-xl font-black text-gray-900 dark:text-white tracking-tight">媒体库光谱扫描</h2>
-                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">多线程并发表引擎 (已启用快照恢复)</p>
+                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">多线程并发表引擎 (智能批量提取已就绪)</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 md:flex md:flex-row items-center gap-2 sm:gap-3 w-full md:w-auto">
-            <div class="col-span-2 md:col-span-1 flex items-center gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl justify-between shadow-sm">
+        <div class="flex flex-wrap md:flex-nowrap items-center gap-2 sm:gap-3 w-full md:w-auto shrink-0">
+            <div class="w-full md:w-auto flex items-center gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl justify-between shadow-sm">
                 <span class="text-xs font-bold text-gray-600 dark:text-gray-400"><i class="fa-solid fa-clock mr-1"></i>自动巡检(3点)</span>
                 <label class="relative inline-flex items-center cursor-pointer shrink-0">
                     <input type="checkbox" x-model="autoScan" @change="toggleAutoScan()" class="sr-only peer">
@@ -42,11 +42,11 @@
                 </label>
             </div>
             
-            <button @click="openIgnoreModal()" class="col-span-1 md:col-span-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition shadow-sm border border-transparent hover:border-gray-300 dark:hover:border-gray-500">
+            <button @click="openIgnoreModal()" class="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition shadow-sm border border-transparent hover:border-gray-300 dark:hover:border-gray-500 whitespace-nowrap">
                 <i class="fa-solid fa-trash-can-arrow-up"></i> <span>回收站</span>
             </button>
 
-            <button @click="startScan()" :disabled="isScanning" class="col-span-1 md:col-span-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm active:scale-95 whitespace-nowrap"
+            <button @click="startScan()" :disabled="isScanning" class="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm active:scale-95 whitespace-nowrap"
                     :class="isScanning ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
                 <i x-show="!isScanning" class="fa-solid fa-satellite-dish"></i>
                 <i x-show="isScanning" class="fa-solid fa-circle-notch fa-spin text-white"></i>
@@ -72,13 +72,13 @@
 
     <div x-show="!isScanning && gapData.length > 0" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 xl:gap-5" x-transition x-cloak>
         <template x-for="series in gapData" :key="series.series_id">
-            <div class="relative rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 bg-white dark:bg-gray-800 overflow-hidden z-10 group hover:shadow-md hover:-translate-y-1">
+            <div class="relative rounded-2xl p-2.5 sm:p-3 shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 bg-white dark:bg-gray-800 overflow-hidden z-10 group hover:shadow-md hover:-translate-y-1">
                 <div :id="'tint-' + series.series_id" class="absolute inset-0 z-0 opacity-15 dark:opacity-20 pointer-events-none transition-colors duration-1000"></div>
 
-                <div class="relative z-10 flex gap-3 sm:gap-4 items-center w-full">
+                <div class="relative z-10 flex gap-2.5 sm:gap-4 items-center w-full">
                     
                     <a :href="series.emby_url" target="_blank" class="shrink-0 relative rounded-lg overflow-hidden shadow-sm aspect-[2/3] w-20 sm:w-24 block group/poster">
-                        <img :src="series.poster" crossorigin="anonymous" loading="lazy" :onload="`extractCardColor(this, 'tint-${series.series_id}')`" class="w-full h-full object-cover group-hover/poster:scale-105 transition-transform duration-500 bg-gray-100 dark:bg-gray-900">
+                        <img :src="series.poster" crossorigin="anonymous" loading="lazy" :data-color-done="false" :onload="`extractCardColor(this, 'tint-${series.series_id}')`" class="w-full h-full object-cover group-hover/poster:scale-105 transition-transform duration-500 bg-gray-100 dark:bg-gray-900">
                         <div class="absolute inset-0 bg-black/30 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-center justify-center">
                             <i class="fa-solid fa-play text-white/90 text-xl"></i>
                         </div>
@@ -87,21 +87,28 @@
                     <div class="flex-1 min-w-0 flex flex-col h-full justify-between py-0.5">
                         <div class="flex justify-between items-start w-full">
                             <div class="min-w-0 pr-1 sm:pr-2">
-                                <h3 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" x-text="series.series_name"></h3>
+                                <h3 class="text-[13px] sm:text-base font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" x-text="series.series_name"></h3>
                                 <div class="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1 sm:gap-1.5">
                                     发现 <span class="text-rose-500 font-bold bg-rose-50 dark:bg-rose-500/10 px-1 rounded" x-text="series.gaps.length"></span> 处断层
                                 </div>
                             </div>
-                            <button @click.prevent="ignoreSeries(series)" class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/60 dark:bg-black/20 flex items-center justify-center text-gray-400 hover:text-rose-500 transition-colors border border-gray-200 dark:border-gray-600 backdrop-blur-md shrink-0 shadow-sm" title="永久忽略该剧全集">
-                                <i class="fa-solid fa-eye-slash text-[10px] sm:text-xs"></i>
-                            </button>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button @click.prevent="ignoreSeries(series)" class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/60 dark:bg-black/20 flex items-center justify-center text-gray-400 hover:text-rose-500 transition-colors border border-gray-200 dark:border-gray-600 backdrop-blur-md shadow-sm" title="永久忽略该剧">
+                                    <i class="fa-solid fa-eye-slash text-[10px] sm:text-xs"></i>
+                                </button>
+                            </div>
                         </div>
 
-                        <div class="mt-2.5 overflow-y-auto pr-1 space-y-1.5 gap-scrollbar max-h-24 sm:max-h-28 w-full">
+                        <div class="mt-2 sm:mt-2.5 overflow-y-auto pr-1 space-y-1.5 gap-scrollbar max-h-24 sm:max-h-28 w-full">
                             <template x-for="(eps, s_num) in groupGaps(series.gaps)" :key="s_num">
-                                <div class="flex items-center gap-1.5 w-full">
-                                    <div class="text-[10px] sm:text-xs font-black text-indigo-500 dark:text-indigo-400 w-5 sm:w-6 shrink-0 pt-0.5">S<span x-text="String(s_num).padStart(2,'0')"></span></div>
-                                    <div class="flex flex-wrap gap-1 sm:gap-1.5 flex-1">
+                                <div class="flex items-start gap-1.5 w-full flex-col sm:flex-row sm:items-center">
+                                    <div class="flex items-center justify-between w-full sm:w-auto">
+                                        <div class="text-[10px] sm:text-xs font-black text-indigo-500 dark:text-indigo-400 w-5 sm:w-6 shrink-0 pt-0.5">S<span x-text="String(s_num).padStart(2,'0')"></span></div>
+                                        
+                                        <button @click="openResolverMulti(series, s_num, eps)" class="sm:hidden text-[9px] bg-indigo-50 text-indigo-600 px-1.5 rounded font-bold border border-indigo-100 shadow-sm">批量补齐</button>
+                                    </div>
+                                    
+                                    <div class="flex flex-wrap gap-1 sm:gap-1.5 flex-1 items-center">
                                         <template x-for="ep in eps" :key="ep.episode">
                                             <button x-show="ep.status === 0" @click="openResolver(series, ep)" 
                                                     class="px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold bg-white dark:bg-[#0a0a0a] text-rose-600 border border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500 dark:hover:text-white transition-colors shadow-sm" title="点击补全该集">
@@ -113,6 +120,7 @@
                                                 <span class="relative z-10" x-text="ep.episode"></span>
                                             </div>
                                         </template>
+                                        <button @click="openResolverMulti(series, s_num, eps)" class="hidden sm:flex px-1.5 py-1 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white transition-colors shadow-sm items-center gap-1 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800" title="一键搜索季包并提取缺失集"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
                                     </div>
                                 </div>
                             </template>
@@ -164,7 +172,7 @@
             <div class="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/80">
                 <div>
                     <h3 class="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-dna text-indigo-500"></i> 基因配型中心</h3>
-                    <p class="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">为 <span class="font-bold text-gray-700 dark:text-gray-200" x-text="`${resolver.seriesName} S${String(resolver.season).padStart(2,'0')}E${String(resolver.episode).padStart(2,'0')}`"></span> 寻找最佳片源</p>
+                    <p class="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">为 <span class="font-bold text-gray-700 dark:text-gray-200" x-text="resolver.targetDesc"></span> 寻找最佳片源</p>
                 </div>
                 <button @click="closeResolver()" class="w-8 h-8 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 transition flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -192,7 +200,7 @@
                                     
                                     <template x-if="res.is_pack">
                                         <div class="mt-1 mb-0.5 inline-block text-[9px] px-1.5 py-0.5 rounded font-black border bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30">
-                                            📦 包含目标集的整季包 (下载时仅提取该集)
+                                            📦 包含目标集的整季包 (将自动注射手术刀提取参数)
                                         </div>
                                     </template>
 
@@ -206,14 +214,14 @@
                             </label>
                         </template>
                     </div>
-                    <div x-show="!resolver.isLoading && resolver.results.length === 0" class="text-center py-10"><i class="fa-solid fa-ghost text-4xl text-gray-200 dark:text-gray-700 mb-3 block"></i><p class="text-xs font-bold text-gray-400 mt-2">未捕获到符合该集的资源星尘</p></div>
+                    <div x-show="!resolver.isLoading && resolver.results.length === 0" class="text-center py-10"><i class="fa-solid fa-ghost text-4xl text-gray-200 dark:text-gray-700 mb-3 block"></i><p class="text-xs font-bold text-gray-400 mt-2">雷达未捕获到符合条件的资源星尘</p></div>
                 </div>
             </div>
             <div class="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 flex gap-3 pb-[env(safe-area-inset-bottom)]">
-                <button @click="ignoreGap()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600 transition shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-eye-slash"></i> <span class="hidden sm:inline">永久忽略单集</span></button>
+                <button x-show="resolver.targetType === 'single'" @click="ignoreGap()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600 transition shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-eye-slash"></i> <span class="hidden sm:inline">忽略单集</span></button>
                 <button @click="sendToMP()" :disabled="!resolver.selectedTorrent || resolver.isSubmitting" class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" :class="resolver.selectedTorrent ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 dark:bg-gray-600 shadow-none'">
                     <span x-show="resolver.isSubmitting" class="animate-spin w-4 h-4 border-2 border-white/30 border-t-white dark:border-black/30 dark:border-t-black rounded-full"></span>
-                    <span x-show="!resolver.isSubmitting">发送至 MP 下载</span>
+                    <span x-show="!resolver.isSubmitting">发送至 MP 提取</span>
                 </button>
             </div>
         </div>
@@ -221,14 +229,16 @@
 </div>
 
 <script>
+// 🔥 添加取色节流阀，防止浏览器重绘时卡顿
 const globalColorThief = new ColorThief();
 window.extractCardColor = function(imgElement, tintId) {
-    if (imgElement.complete) {
+    if (imgElement.complete && imgElement.getAttribute('data-color-done') !== 'true') {
         try {
             const color = globalColorThief.getColor(imgElement);
             const tint = document.getElementById(tintId);
             if (tint) {
                 tint.style.background = `linear-gradient(135deg, rgb(${color[0]}, ${color[1]}, ${color[2]}) 0%, transparent 80%)`;
+                imgElement.setAttribute('data-color-done', 'true'); // 上锁！再怎么缩放也不会重绘卡顿了！
             }
         } catch(e) {}
     }
@@ -240,7 +250,7 @@ document.addEventListener('alpine:init', () => {
         scanProgress: 0, scanTotal: 0, scanItem: '等待启航...',
         pollInterval: null, gapData: [],
         ignoreModal: { open: false, items: [] },
-        resolver: { open: false, isLoading: false, isSubmitting: false, seriesId: '', seriesName: '', season: 0, episode: 0, genes: [], results: [], selectedTorrent: null, sourceEpObj: null },
+        resolver: { open: false, isLoading: false, isSubmitting: false, seriesId: '', seriesName: '', season: 0, episode: 0, episodes: [], targetDesc: '', targetType: 'single', genes: [], results: [], selectedTorrent: null, sourceEpObj: null, sourceEpsArray: [] },
 
         init() { this.checkStatus(); this.fetchAutoScan(); },
 
@@ -329,11 +339,39 @@ document.addEventListener('alpine:init', () => {
             } catch(e) {}
         },
 
+        // 🔥 单集解析
         async openResolver(series, ep) {
             if (ep.status === 2) return; 
-            this.resolver.open = true; this.resolver.isLoading = true; this.resolver.seriesId = series.series_id; this.resolver.seriesName = series.series_name; this.resolver.season = ep.season; this.resolver.episode = ep.episode; this.resolver.genes = []; this.resolver.results = []; this.resolver.selectedTorrent = null; this.resolver.sourceEpObj = ep; 
+            this.resolver.open = true; this.resolver.isLoading = true; this.resolver.targetType = 'single';
+            this.resolver.seriesId = series.series_id; this.resolver.seriesName = series.series_name; this.resolver.season = ep.season; 
+            this.resolver.episode = ep.episode; this.resolver.episodes = [ep.episode]; 
+            this.resolver.targetDesc = `${series.series_name} S${String(ep.season).padStart(2,'0')}E${String(ep.episode).padStart(2,'0')}`;
+            this.resolver.genes = []; this.resolver.results = []; this.resolver.selectedTorrent = null; this.resolver.sourceEpObj = ep; 
+            
             try {
-                const res = await fetch('/api/gaps/search_mp', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: series.series_id, series_name: series.series_name, season: ep.season, episode: ep.episode }) });
+                const res = await fetch('/api/gaps/search_mp', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: series.series_id, series_name: series.series_name, season: ep.season, episodes: [ep.episode], episode: ep.episode }) });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    this.resolver.genes = data.data.genes; this.resolver.results = data.data.results;
+                    if(this.resolver.results.length > 0) this.resolver.selectedTorrent = this.resolver.results[0]; 
+                } else { alert(data.message); }
+            } catch(e) { alert('网络请求异常'); }
+            this.resolver.isLoading = false;
+        },
+
+        // 🔥 批量解析 (多集一键提取)
+        async openResolverMulti(series, season_num, epsArray) {
+            const missingEps = epsArray.filter(e => e.status === 0).map(e => e.episode);
+            if(missingEps.length === 0) return;
+
+            this.resolver.open = true; this.resolver.isLoading = true; this.resolver.targetType = 'multi';
+            this.resolver.seriesId = series.series_id; this.resolver.seriesName = series.series_name; this.resolver.season = season_num; 
+            this.resolver.episode = missingEps[0]; this.resolver.episodes = missingEps; 
+            this.resolver.targetDesc = `${series.series_name} S${String(season_num).padStart(2,'0')} 批量提取 [${missingEps.join(', ')}]`;
+            this.resolver.genes = []; this.resolver.results = []; this.resolver.selectedTorrent = null; this.resolver.sourceEpsArray = epsArray; 
+            
+            try {
+                const res = await fetch('/api/gaps/search_mp', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: series.series_id, series_name: series.series_name, season: season_num, episodes: missingEps, episode: missingEps[0] }) });
                 const data = await res.json();
                 if (data.status === 'success') {
                     this.resolver.genes = data.data.genes; this.resolver.results = data.data.results;
@@ -349,10 +387,17 @@ document.addEventListener('alpine:init', () => {
             if(!this.resolver.selectedTorrent) return;
             this.resolver.isSubmitting = true;
             try {
-                const res = await fetch('/api/gaps/download', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: this.resolver.seriesId, series_name: this.resolver.seriesName, season: this.resolver.season, episode: this.resolver.episode, torrent_info: this.resolver.selectedTorrent }) });
+                const res = await fetch('/api/gaps/download', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: this.resolver.seriesId, series_name: this.resolver.seriesName, season: this.resolver.season, episode: this.resolver.episode, episodes: this.resolver.episodes, torrent_info: this.resolver.selectedTorrent }) });
                 const data = await res.json();
                 if (data.status === 'success') { 
-                    if (this.resolver.sourceEpObj) this.resolver.sourceEpObj.status = 2; 
+                    if(this.resolver.targetType === 'single' && this.resolver.sourceEpObj) {
+                        this.resolver.sourceEpObj.status = 2; 
+                    } else if (this.resolver.targetType === 'multi') {
+                        // 批量变蓝
+                        this.resolver.sourceEpsArray.forEach(e => {
+                            if(this.resolver.episodes.includes(e.episode)) e.status = 2;
+                        });
+                    }
                     this.closeResolver(); 
                 } else { 
                     alert(data.message); 

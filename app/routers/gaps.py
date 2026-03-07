@@ -4,6 +4,7 @@ import threading
 import concurrent.futures
 from datetime import datetime
 from pydantic import BaseModel
+from typing import List, Optional
 import time
 import urllib.parse
 import json
@@ -14,6 +15,7 @@ from app.routers.search import get_emby_sys_info, is_new_emby_router
 
 router = APIRouter(prefix="/api/gaps", tags=["gaps"])
 
+# ----------------- 异步状态机 -----------------
 scan_state = {"is_scanning": False, "progress": 0, "total": 0, "current_item": "系统准备中...", "results": [], "error": None}
 state_lock = threading.Lock()
 
@@ -215,13 +217,25 @@ def unignore_item(payload: dict):
         return {"status": "success"}
     except Exception as e: return {"status": "error"}
 
-class GapSearchReq(BaseModel): series_id: str; series_name: str; season: int; episode: int
-class GapDownloadReq(BaseModel): series_id: str; series_name: str; season: int; episode: int; torrent_info: dict
+# 🔥 重构请求模型，支持批量集数提取
+class GapSearchReq(BaseModel): 
+    series_id: str
+    series_name: str
+    season: int
+    episodes: List[int] # 支持传入整个季缺少的多个集数
+
+class GapDownloadReq(BaseModel): 
+    series_id: str
+    series_name: str
+    season: int
+    episodes: List[int] # 批量入库锁定使用
+    torrent_info: dict
 
 @router.post("/search_mp")
 def search_mp_for_gap(req: GapSearchReq):
     host = cfg.get("emby_host"); key = cfg.get("emby_api_key"); mp_url = cfg.get("moviepilot_url"); mp_token = cfg.get("moviepilot_token")
     if not mp_url or not mp_token: return {"status": "error", "message": "未配置 MP"}
+    
     admin_id = get_admin_user_id(); genes = []
     if admin_id:
         try:
@@ -235,44 +249,45 @@ def search_mp_for_gap(req: GapSearchReq):
                     if "HDR" in video.get("VideoRange", "") or "HDR" in d_title: genes.append("HDR")
                     if "DOVI" in d_title or "DOLBY VISION" in d_title: genes.append("DoVi")
         except: pass
-    if not genes: genes = ["默认基因 (无明显特效)"]
+    if not genes: genes = ["无明显特效"]
     
     clean_token = mp_token.strip().strip("'\"")
     headers = {"X-API-KEY": clean_token, "User-Agent": "Mozilla/5.0", "Accept": "application/json"}
     
-    try:
-        keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episode).zfill(2)}"
-        encoded_keyword = urllib.parse.quote(keyword)
-        mp_res = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={encoded_keyword}", headers=headers, timeout=20)
-        results = mp_res.json() if mp_res.status_code == 200 else []
-        
-        if isinstance(results, dict): results = results.get("data") or results.get("results") or []
-        if not isinstance(results, list): results = []
+    def deep_extract(d, keys):
+        for k in keys:
+            if d.get(k) is not None and str(d.get(k)).strip() != "": return d.get(k)
+        for nested in ["torrent", "torrent_info", "detail", "data", "info"]:
+            if isinstance(d.get(nested), dict):
+                for k in keys:
+                    if d[nested].get(k) is not None and str(d[nested].get(k)).strip() != "": return d[nested].get(k)
+        return None
 
+    try:
+        # 🔥 优化：判断。如果前端只传了 1 集，优先搜单集。如果传了多集，直接搜季包！
+        results = []
         is_pack = False
+        
+        if len(req.episodes) == 1:
+            keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episodes[0]).zfill(2)}"
+            mp_res = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={urllib.parse.quote(keyword)}", headers=headers, timeout=20)
+            res_data = mp_res.json() if mp_res.status_code == 200 else []
+            if isinstance(res_data, dict): res_data = res_data.get("data") or res_data.get("results") or []
+            if isinstance(res_data, list): results = res_data
+        
+        # 降级搜索或批量搜索：搜整季包
         if len(results) == 0:
             fallback_kw = f"{req.series_name} S{str(req.season).zfill(2)}"
             mp_res2 = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={urllib.parse.quote(fallback_kw)}", headers=headers, timeout=20)
-            results2 = mp_res2.json() if mp_res2.status_code == 200 else []
-            if isinstance(results2, dict): results2 = results2.get("data") or results2.get("results") or []
-            if not isinstance(results2, list): results2 = []
-            results = results2
-            is_pack = True
+            res_data2 = mp_res2.json() if mp_res2.status_code == 200 else []
+            if isinstance(res_data2, dict): res_data2 = res_data2.get("data") or res_data2.get("results") or []
+            if isinstance(res_data2, list): 
+                results = res_data2
+                is_pack = True
 
-        # 🔥 深度递归探针：治愈“未知标题与NaN”的终极解法
-        def deep_extract(d, keys):
-            for k in keys:
-                if d.get(k) is not None and str(d.get(k)).strip() != "": return d.get(k)
-            for nested in ["torrent", "torrent_info", "detail", "data", "info"]:
-                if isinstance(d.get(nested), dict):
-                    for k in keys:
-                        if d[nested].get(k) is not None and str(d[nested].get(k)).strip() != "": return d[nested].get(k)
-            return None
-
+        processed_results = []
         for r in results:
             score = 0
-            
-            # 使用深度探针提取标题和大小
             title_str = str(deep_extract(r, ["name", "title", "torrent_name"]) or "未提取到种名")
             desc_str = str(deep_extract(r, ["description", "desc", "detail", "subtitle"]) or "")
             combined_text = title_str.upper() + " " + desc_str.upper()
@@ -284,10 +299,14 @@ def search_mp_for_gap(req: GapSearchReq):
             if "HDR" in genes and "HDR" in combined_text: score += 20
             if "WEB" in combined_text: score += 10
             
+            # 🔥 彻底提取 MP 下载所需的核心原生载荷，隔离到 org_payload 中
+            org_payload = {k: v for k, v in r.items() if not k.startswith("ui_") and k not in ["match_score", "is_pack", "extracted_tags", "org_payload"]}
+            
             r["ui_title"] = title_str  
             r["ui_size"] = float(size_val) 
             r["match_score"] = score
             r["is_pack"] = is_pack 
+            r["org_payload"] = org_payload # 藏好原生载荷
             
             tags = []
             if "2160P" in combined_text or "4K" in combined_text: tags.append("4K")
@@ -296,35 +315,34 @@ def search_mp_for_gap(req: GapSearchReq):
             elif "HDR" in combined_text: tags.append("HDR")
             if "WEB" in combined_text: tags.append("WEB-DL")
             r["extracted_tags"] = tags
+            processed_results.append(r)
 
-        results.sort(key=lambda x: x["match_score"], reverse=True)
-        return {"status": "success", "data": {"genes": genes, "results": results[:10]}}
+        processed_results.sort(key=lambda x: x["match_score"], reverse=True)
+        return {"status": "success", "data": {"genes": genes, "results": processed_results[:10]}}
     except Exception as e: return {"status": "error", "message": str(e)}
 
 @router.post("/download")
 def download_gap_item(req: GapDownloadReq):
     mp_url = cfg.get("moviepilot_url"); mp_token = cfg.get("moviepilot_token")
-    clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token}
+    clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token, "Content-Type": "application/json"}
     
-    # 转换为独立的字典对象
-    torrent_info = dict(req.torrent_info)
+    # 🔥 从前端取出纯净的原生载荷
+    pure_torrent_info = req.torrent_info.get("org_payload", req.torrent_info)
     
-    # 🔥 数据脱水机：提取私货，治愈 422 报错！
-    is_pack = torrent_info.pop("is_pack", False)
-    for k in ["ui_title", "ui_size", "match_score", "extracted_tags"]:
-        torrent_info.pop(k, None)
-
-    # 🔥 手术刀提取：如果是季包，强行注射单集参数逼迫下载器单独提取
-    if is_pack:
-        torrent_info["season"] = req.season
-        torrent_info["episodes"] = [req.episode]
-        torrent_info["episode"] = [req.episode] # 兼容双参结构
+    # 🔥 核心：手术刀级别提取指令注入
+    if req.torrent_info.get("is_pack", False):
+        pure_torrent_info["season"] = req.season
+        # 将缺失的多集数组直接注入，MP 将解析它并命令下载器过滤
+        pure_torrent_info["episodes"] = req.episodes 
 
     try:
-        # 下发最纯净的字典
-        res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=torrent_info, timeout=10)
+        res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=pure_torrent_info, timeout=10)
         if res.status_code == 200:
-            query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (req.series_id, req.series_name, req.season, req.episode))
-            return {"status": "success", "message": "已派单给 MP"}
-        return {"status": "error", "message": f"MP 返回异常 (HTTP {res.status_code})"}
+            # 批量锁定本地数据库，全部变为处理中蓝灯
+            for ep in req.episodes:
+                query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (req.series_id, req.series_name, req.season, ep))
+            return {"status": "success", "message": "已派单给 MP，手术刀提取进行中"}
+        
+        # 兼容备用方案：如果 download 拒绝接收，尝试调用订阅接口兜底
+        return {"status": "error", "message": f"下发失败 (HTTP {res.status_code})"}
     except Exception as e: return {"status": "error", "message": str(e)}

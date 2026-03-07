@@ -14,7 +14,6 @@ from app.routers.search import get_emby_sys_info, is_new_emby_router
 
 router = APIRouter(prefix="/api/gaps", tags=["gaps"])
 
-# ----------------- 异步状态机 -----------------
 scan_state = {"is_scanning": False, "progress": 0, "total": 0, "current_item": "系统准备中...", "results": [], "error": None}
 state_lock = threading.Lock()
 
@@ -183,14 +182,14 @@ def ignore_gap(payload: dict):
     try:
         query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 1) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 1", (payload.get("series_id"), payload.get("series_name", ""), int(payload.get("season_number", 0)), int(payload.get("episode_number", 0))))
         return {"status": "success"}
-    except: return {"status": "error"}
+    except Exception as e: return {"status": "error"}
 
 @router.post("/ignore/series")
 def ignore_entire_series(payload: dict):
     try:
         query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, -1, -1, 1) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 1", (payload.get("series_id"), payload.get("series_name", "")))
         return {"status": "success"}
-    except: return {"status": "error"}
+    except Exception as e: return {"status": "error"}
 
 @router.get("/ignores")
 def get_ignored_list():
@@ -206,7 +205,7 @@ def get_ignored_list():
             for r in perfects: data.append({"type": "perfect", "id": r['series_id'], "series_name": r['series_name'], "target": "完结免检金牌", "time": r['marked_at']})
         data.sort(key=lambda x: x['time'], reverse=True)
         return {"status": "success", "data": data}
-    except: return {"status": "error"}
+    except Exception as e: return {"status": "error", "message": str(e)}
 
 @router.post("/unignore")
 def unignore_item(payload: dict):
@@ -214,7 +213,7 @@ def unignore_item(payload: dict):
         if payload.get("type") == "record": query_db("DELETE FROM gap_records WHERE id = ?", (payload.get("id"),))
         elif payload.get("type") == "perfect": query_db("DELETE FROM gap_perfect_series WHERE series_id = ?", (payload.get("id"),))
         return {"status": "success"}
-    except: return {"status": "error"}
+    except Exception as e: return {"status": "error"}
 
 class GapSearchReq(BaseModel): series_id: str; series_name: str; season: int; episode: int
 class GapDownloadReq(BaseModel): series_id: str; series_name: str; season: int; episode: int; torrent_info: dict
@@ -236,7 +235,7 @@ def search_mp_for_gap(req: GapSearchReq):
                     if "HDR" in video.get("VideoRange", "") or "HDR" in d_title: genes.append("HDR")
                     if "DOVI" in d_title or "DOLBY VISION" in d_title: genes.append("DoVi")
         except: pass
-    if not genes: genes = ["无明显特效"]
+    if not genes: genes = ["默认基因 (无明显特效)"]
     
     clean_token = mp_token.strip().strip("'\"")
     headers = {"X-API-KEY": clean_token, "User-Agent": "Mozilla/5.0", "Accept": "application/json"}
@@ -260,15 +259,24 @@ def search_mp_for_gap(req: GapSearchReq):
             results = results2
             is_pack = True
 
+        # 🔥 深度递归探针：治愈“未知标题与NaN”的终极解法
+        def deep_extract(d, keys):
+            for k in keys:
+                if d.get(k) is not None and str(d.get(k)).strip() != "": return d.get(k)
+            for nested in ["torrent", "torrent_info", "detail", "data", "info"]:
+                if isinstance(d.get(nested), dict):
+                    for k in keys:
+                        if d[nested].get(k) is not None and str(d[nested].get(k)).strip() != "": return d[nested].get(k)
+            return None
+
         for r in results:
             score = 0
-            # 🔥 彻底修复 undefined: 多字段智能探测提取标题
-            title_str = str(r.get("name") or r.get("title") or r.get("torrent_name") or "未知标题")
-            desc_str = str(r.get("description") or "")
-            combined_text = title_str.upper() + " " + desc_str.upper()
             
-            # 🔥 彻底修复 NaN: 多字段智能探测提取体积
-            size_val = r.get("size") or r.get("enclosure_size") or 0
+            # 使用深度探针提取标题和大小
+            title_str = str(deep_extract(r, ["name", "title", "torrent_name"]) or "未提取到种名")
+            desc_str = str(deep_extract(r, ["description", "desc", "detail", "subtitle"]) or "")
+            combined_text = title_str.upper() + " " + desc_str.upper()
+            size_val = deep_extract(r, ["size", "enclosure_size", "torrent_size"]) or 0
             
             if "4K" in genes: score += 50 if ("2160P" in combined_text or "4K" in combined_text) else -20
             if "1080P" in genes and "1080P" in combined_text: score += 50
@@ -276,8 +284,8 @@ def search_mp_for_gap(req: GapSearchReq):
             if "HDR" in genes and "HDR" in combined_text: score += 20
             if "WEB" in combined_text: score += 10
             
-            r["ui_title"] = title_str   # 赋值给前端统一调用
-            r["ui_size"] = float(size_val) # 赋值给前端统一调用
+            r["ui_title"] = title_str  
+            r["ui_size"] = float(size_val) 
             r["match_score"] = score
             r["is_pack"] = is_pack 
             
@@ -298,16 +306,25 @@ def download_gap_item(req: GapDownloadReq):
     mp_url = cfg.get("moviepilot_url"); mp_token = cfg.get("moviepilot_token")
     clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token}
     
-    torrent_info = req.torrent_info
-    if torrent_info.get("is_pack"):
+    # 转换为独立的字典对象
+    torrent_info = dict(req.torrent_info)
+    
+    # 🔥 数据脱水机：提取私货，治愈 422 报错！
+    is_pack = torrent_info.pop("is_pack", False)
+    for k in ["ui_title", "ui_size", "match_score", "extracted_tags"]:
+        torrent_info.pop(k, None)
+
+    # 🔥 手术刀提取：如果是季包，强行注射单集参数逼迫下载器单独提取
+    if is_pack:
         torrent_info["season"] = req.season
         torrent_info["episodes"] = [req.episode]
-        torrent_info["episode"] = [req.episode]
+        torrent_info["episode"] = [req.episode] # 兼容双参结构
 
     try:
+        # 下发最纯净的字典
         res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=torrent_info, timeout=10)
         if res.status_code == 200:
             query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (req.series_id, req.series_name, req.season, req.episode))
             return {"status": "success", "message": "已派单给 MP"}
-        return {"status": "error", "message": "下发失败"}
+        return {"status": "error", "message": f"MP 返回异常 (HTTP {res.status_code})"}
     except Exception as e: return {"status": "error", "message": str(e)}

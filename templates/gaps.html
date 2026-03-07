@@ -20,20 +20,21 @@
 {% block content %}
 <div x-data="gapManager()" x-init="init()" class="max-w-7xl mx-auto space-y-4 sm:space-y-6 px-1 sm:px-4 md:px-8 py-4 sm:py-6 pb-24">
 
-    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 shadow-sm border border-gray-100 dark:border-gray-700">
-        <div class="flex items-center gap-3">
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 shadow-sm border border-gray-100 dark:border-gray-700 w-full">
+        
+        <div class="flex items-center gap-3 w-full md:w-auto">
             <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center relative overflow-hidden border border-indigo-100 dark:border-indigo-800 shrink-0">
                 <div x-show="isScanning" class="absolute inset-0 radar-sweep"></div>
                 <i class="fa-solid fa-tower-broadcast text-xl text-indigo-500 relative z-10" :class="isScanning ? 'animate-pulse' : ''"></i>
             </div>
             <div>
                 <h2 class="text-lg sm:text-xl font-black text-gray-900 dark:text-white tracking-tight">媒体库光谱扫描</h2>
-                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">多线程并发表引擎 (已启用重启快照恢复)</p>
+                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">多线程并发表引擎 (已启用快照恢复)</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 sm:flex sm:flex-row items-center gap-2 sm:gap-3 w-full md:w-auto">
-            <div class="col-span-2 sm:col-span-1 flex items-center gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl justify-between shadow-sm">
+        <div class="grid grid-cols-2 md:flex md:flex-row items-center gap-2 sm:gap-3 w-full md:w-auto">
+            <div class="col-span-2 md:col-span-1 flex items-center gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 rounded-xl justify-between shadow-sm">
                 <span class="text-xs font-bold text-gray-600 dark:text-gray-400"><i class="fa-solid fa-clock mr-1"></i>自动巡检(3点)</span>
                 <label class="relative inline-flex items-center cursor-pointer shrink-0">
                     <input type="checkbox" x-model="autoScan" @change="toggleAutoScan()" class="sr-only peer">
@@ -41,11 +42,11 @@
                 </label>
             </div>
             
-            <button @click="openIgnoreModal()" class="col-span-1 flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition shadow-sm border border-transparent hover:border-gray-300 dark:hover:border-gray-500">
+            <button @click="openIgnoreModal()" class="col-span-1 md:col-span-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition shadow-sm border border-transparent hover:border-gray-300 dark:hover:border-gray-500">
                 <i class="fa-solid fa-trash-can-arrow-up"></i> <span>回收站</span>
             </button>
 
-            <button @click="startScan()" :disabled="isScanning" class="col-span-1 flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm active:scale-95"
+            <button @click="startScan()" :disabled="isScanning" class="col-span-1 md:col-span-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm active:scale-95 whitespace-nowrap"
                     :class="isScanning ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
                 <i x-show="!isScanning" class="fa-solid fa-satellite-dish"></i>
                 <i x-show="isScanning" class="fa-solid fa-circle-notch fa-spin text-white"></i>
@@ -71,42 +72,43 @@
 
     <div x-show="!isScanning && gapData.length > 0" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 xl:gap-5" x-transition x-cloak>
         <template x-for="series in gapData" :key="series.series_id">
-            <div class="relative rounded-2xl p-2.5 sm:p-3 shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 bg-white dark:bg-gray-800 overflow-hidden z-10 group hover:shadow-md hover:-translate-y-1">
+            <div class="relative rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 bg-white dark:bg-gray-800 overflow-hidden z-10 group hover:shadow-md hover:-translate-y-1">
                 <div :id="'tint-' + series.series_id" class="absolute inset-0 z-0 opacity-15 dark:opacity-20 pointer-events-none transition-colors duration-1000"></div>
 
-                <div class="relative z-10 flex gap-2.5 sm:gap-4 items-center w-full">
-                    <a :href="series.emby_url" target="_blank" class="shrink-0 relative rounded-lg overflow-hidden shadow-sm aspect-[2/3] w-[60px] h-[90px] sm:w-[72px] sm:h-[108px] block group/poster">
+                <div class="relative z-10 flex gap-3 sm:gap-4 items-center w-full">
+                    
+                    <a :href="series.emby_url" target="_blank" class="shrink-0 relative rounded-lg overflow-hidden shadow-sm aspect-[2/3] w-20 sm:w-24 block group/poster">
                         <img :src="series.poster" crossorigin="anonymous" loading="lazy" :onload="`extractCardColor(this, 'tint-${series.series_id}')`" class="w-full h-full object-cover group-hover/poster:scale-105 transition-transform duration-500 bg-gray-100 dark:bg-gray-900">
                         <div class="absolute inset-0 bg-black/30 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-center justify-center">
-                            <i class="fa-solid fa-play text-white/90 text-sm sm:text-base"></i>
+                            <i class="fa-solid fa-play text-white/90 text-xl"></i>
                         </div>
                     </a>
 
-                    <div class="flex-1 min-w-0 flex flex-col h-full justify-between">
+                    <div class="flex-1 min-w-0 flex flex-col h-full justify-between py-0.5">
                         <div class="flex justify-between items-start w-full">
                             <div class="min-w-0 pr-1 sm:pr-2">
-                                <h3 class="text-[13px] sm:text-base font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" x-text="series.series_name"></h3>
-                                <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1 sm:gap-1.5">
+                                <h3 class="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" x-text="series.series_name"></h3>
+                                <div class="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1 sm:gap-1.5">
                                     发现 <span class="text-rose-500 font-bold bg-rose-50 dark:bg-rose-500/10 px-1 rounded" x-text="series.gaps.length"></span> 处断层
                                 </div>
                             </div>
-                            <button @click.prevent="ignoreSeries(series)" class="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/60 dark:bg-black/20 flex items-center justify-center text-gray-400 hover:text-rose-500 transition-colors border border-gray-200 dark:border-gray-600 backdrop-blur-md shrink-0 shadow-sm" title="永久忽略该剧全集">
-                                <i class="fa-solid fa-eye-slash text-[9px] sm:text-[10px]"></i>
+                            <button @click.prevent="ignoreSeries(series)" class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/60 dark:bg-black/20 flex items-center justify-center text-gray-400 hover:text-rose-500 transition-colors border border-gray-200 dark:border-gray-600 backdrop-blur-md shrink-0 shadow-sm" title="永久忽略该剧全集">
+                                <i class="fa-solid fa-eye-slash text-[10px] sm:text-xs"></i>
                             </button>
                         </div>
 
-                        <div class="mt-2 sm:mt-2.5 overflow-y-auto pr-1 space-y-1.5 gap-scrollbar max-h-[50px] sm:max-h-[60px] w-full">
+                        <div class="mt-2.5 overflow-y-auto pr-1 space-y-1.5 gap-scrollbar max-h-24 sm:max-h-28 w-full">
                             <template x-for="(eps, s_num) in groupGaps(series.gaps)" :key="s_num">
                                 <div class="flex items-center gap-1.5 w-full">
-                                    <div class="text-[10px] font-black text-indigo-500 dark:text-indigo-400 w-5 shrink-0 pt-0.5">S<span x-text="String(s_num).padStart(2,'0')"></span></div>
-                                    <div class="flex flex-wrap gap-1 flex-1">
+                                    <div class="text-[10px] sm:text-xs font-black text-indigo-500 dark:text-indigo-400 w-5 sm:w-6 shrink-0 pt-0.5">S<span x-text="String(s_num).padStart(2,'0')"></span></div>
+                                    <div class="flex flex-wrap gap-1 sm:gap-1.5 flex-1">
                                         <template x-for="ep in eps" :key="ep.episode">
                                             <button x-show="ep.status === 0" @click="openResolver(series, ep)" 
-                                                    class="px-1.5 sm:px-2 py-0.5 rounded text-[10px] font-bold bg-white dark:bg-[#0a0a0a] text-rose-600 border border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500 dark:hover:text-white transition-colors shadow-sm" title="点击补全该集">
+                                                    class="px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold bg-white dark:bg-[#0a0a0a] text-rose-600 border border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500 dark:hover:text-white transition-colors shadow-sm" title="点击补全该集">
                                                 <span x-text="ep.episode"></span>
                                             </button>
                                             <div x-show="ep.status === 2" 
-                                                 class="px-1.5 sm:px-2 py-0.5 rounded flex items-center justify-center cursor-help text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 relative overflow-hidden" title="MP 处理中">
+                                                 class="px-2 py-1 rounded flex items-center justify-center cursor-help text-[10px] sm:text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 relative overflow-hidden shadow-sm" title="MP 处理中">
                                                 <div class="absolute inset-x-0 bottom-0 bg-blue-200 dark:bg-blue-500/40 animate-pulse h-1/2"></div>
                                                 <span class="relative z-10" x-text="ep.episode"></span>
                                             </div>
@@ -349,7 +351,6 @@ document.addEventListener('alpine:init', () => {
             try {
                 const res = await fetch('/api/gaps/download', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ series_id: this.resolver.seriesId, series_name: this.resolver.seriesName, season: this.resolver.season, episode: this.resolver.episode, torrent_info: this.resolver.selectedTorrent }) });
                 const data = await res.json();
-                // 🔥 修复了 js data 未定义的报错，点击失败也能正常弹窗了！
                 if (data.status === 'success') { 
                     if (this.resolver.sourceEpObj) this.resolver.sourceEpObj.status = 2; 
                     this.closeResolver(); 

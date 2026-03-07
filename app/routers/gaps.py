@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import json
 import urllib.parse
+import re
+import time
 
 from app.core.config import cfg
 from app.core.database import query_db
@@ -237,6 +239,25 @@ def unignore_item(payload: dict):
         return {"status": "success"}
     except Exception as e: return {"status": "error"}
 
+
+# ==========================================
+# 🔥 UI 动态配置库 (读写 qB 参数)
+# ==========================================
+@router.get("/config")
+def get_gap_config():
+    query_db("CREATE TABLE IF NOT EXISTS gap_config (key TEXT PRIMARY KEY, value TEXT)")
+    rows = query_db("SELECT key, value FROM gap_config")
+    conf = {r['key']: r['value'] for r in rows} if rows else {}
+    return {"status": "success", "data": conf}
+
+@router.post("/config")
+def save_gap_config(payload: dict):
+    query_db("CREATE TABLE IF NOT EXISTS gap_config (key TEXT PRIMARY KEY, value TEXT)")
+    for k, v in payload.items():
+        query_db("INSERT OR REPLACE INTO gap_config (key, value) VALUES (?, ?)", (k, str(v).strip()))
+    return {"status": "success"}
+
+
 @router.post("/search_mp")
 def search_mp_for_gap(payload: dict):
     series_id = payload.get("series_id")
@@ -340,11 +361,66 @@ def search_mp_for_gap(payload: dict):
         return {"status": "success", "data": {"genes": genes, "results": processed_results[:10]}}
     except Exception as e: return {"status": "error", "message": str(e)}
 
+# ==========================================
+# 🔥 qB 截胡操作
+# ==========================================
+def qb_login(qb_host, qb_user, qb_pass):
+    try:
+        session = requests.Session()
+        res = session.post(f"{qb_host.rstrip('/')}/api/v2/auth/login", data={"username": qb_user, "password": qb_pass}, timeout=5)
+        if res.status_code == 200 and "Ok" in res.text: return session
+        return None
+    except: return None
+
+def qb_hook_files(session, qb_host, torrent_name, episodes):
+    try:
+        res = session.get(f"{qb_host.rstrip('/')}/api/v2/torrents/info?filter=all", timeout=5)
+        if res.status_code != 200: return False
+        
+        torrents = res.json()
+        target_hash = None
+        for t in torrents:
+            if torrent_name.replace(".", " ")[:15] in t.get("name", "").replace(".", " "):
+                target_hash = t.get("hash")
+                break
+        
+        if not target_hash: return False
+
+        files_res = session.get(f"{qb_host.rstrip('/')}/api/v2/torrents/files?hash={target_hash}", timeout=5)
+        if files_res.status_code != 200: return False
+        files = files_res.json()
+
+        unwanted_ids = []
+        wanted_ids = []
+        
+        ep_patterns = [re.compile(r"(?i)[e|ep|episode]?\s*0?" + str(e) + r"\b") for e in episodes]
+
+        for i, f in enumerate(files):
+            file_name = f.get("name", "")
+            if not file_name.lower().endswith(('.mp4', '.mkv', '.avi', '.ts', '.iso')):
+                unwanted_ids.append(str(i))
+                continue
+                
+            is_wanted = False
+            for p in ep_patterns:
+                if p.search(file_name):
+                    is_wanted = True
+                    break
+                    
+            if is_wanted: wanted_ids.append(str(i))
+            else: unwanted_ids.append(str(i))
+
+        if unwanted_ids:
+            session.post(f"{qb_host.rstrip('/')}/api/v2/torrents/filePrio", data={"hash": target_hash, "id": "|".join(unwanted_ids), "priority": 0}, timeout=5)
+        
+        return True
+    except Exception as e:
+        return False
+
 @router.post("/download")
 def download_gap_item(payload: dict):
     series_id = payload.get("series_id")
     series_name = payload.get("series_name")
-    tmdbid = payload.get("tmdbid")
     season = payload.get("season")
     episodes = payload.get("episodes", [])
     torrent_info = payload.get("torrent_info", {})
@@ -354,49 +430,30 @@ def download_gap_item(payload: dict):
     clean_token = mp_token.strip().strip("'\"") if mp_token else ""
     headers = {"X-API-KEY": clean_token, "Content-Type": "application/json"}
     
-    # 拿到包含 Cookie 和原味种子的完美字典
-    pure_torrent_in = torrent_info.get("org_payload", torrent_info)
-    season_val = int(season) if season else 1
-    eps_val = [int(e) for e in episodes] if episodes else []
+    # 动态从数据库读取用户配置的 qB 参数
+    query_db("CREATE TABLE IF NOT EXISTS gap_config (key TEXT PRIMARY KEY, value TEXT)")
+    db_rows = query_db("SELECT key, value FROM gap_config")
+    ui_conf = {r['key']: r['value'] for r in db_rows} if db_rows else {}
     
-    # 🔥 核心防御网：饱和式打击！在这三个可能被 MP 解析的地方，全部强行注入集数过滤！
-    # 1. 注入内部的 torrent_info
-    pure_torrent_in["season"] = season_val
-    pure_torrent_in["episode"] = eps_val
-    pure_torrent_in["episodes"] = eps_val
-    if "meta_info" in pure_torrent_in:
-        pure_torrent_in["meta_info"]["episode_list"] = eps_val
-        pure_torrent_in["meta_info"]["season_episode"] = f"S{str(season_val).zfill(2)}E{str(eps_val[0]).zfill(2)}" if eps_val else f"S{str(season_val).zfill(2)}"
-
-    # 2. 注入外部的 media_in 和顶层
-    mp_payload = {
-        "media_in": {
-            "tmdbid": int(tmdbid) if tmdbid else None,
-            "title": series_name,
-            "type": "电视剧",
-            "season": season_val,
-            "episode": eps_val,
-            "episodes": eps_val
-        },
-        "torrent_in": pure_torrent_in,
-        "season": season_val,
-        "episode": eps_val,
-        "episodes": eps_val
-    }
+    qb_host = ui_conf.get("qb_host", "")
+    qb_user = ui_conf.get("qb_user", "")
+    qb_pass = ui_conf.get("qb_pass", "")
+    
+    pure_torrent_in = torrent_info.get("org_payload", torrent_info)
+    mp_payload = {"torrent_in": pure_torrent_in}
 
     try:
-        # 🔥 放弃盲人接口，改用标准的 /api/v1/download/ 精确制导接口
-        post_url = f"{mp_url.rstrip('/')}/api/v1/download/"
-        
-        # 延长超时，留给 MP 去慢慢下载字幕或处理任务的时间
-        res = requests.post(post_url, headers=headers, json=mp_payload, timeout=60)
+        add_url = f"{mp_url.rstrip('/')}/api/v1/download/add"
+        res = requests.post(add_url, headers=headers, json=mp_payload, timeout=20)
         
         if res.status_code in [200, 201]:
-            try:
-                res_data = res.json()
-                if res_data.get("success") == False:
-                    return {"status": "error", "message": res_data.get("message") or "MP 拒绝下载"}
-            except: pass
+            # 只有用户配置了 qB 地址，并且是多集提取时，才执行手术刀截胡
+            if qb_host and len(episodes) > 0 and torrent_info.get("is_pack", False):
+                time.sleep(3) # 等待 MP 把种子推送到 qB
+                qb_session = qb_login(qb_host, qb_user, qb_pass)
+                if qb_session:
+                    torrent_title = pure_torrent_in.get("title", "")
+                    qb_hook_files(qb_session, qb_host, torrent_title, episodes)
 
             for ep in episodes:
                 query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (series_id, series_name, int(season), int(ep)))
@@ -408,9 +465,8 @@ def download_gap_item(payload: dict):
                             if ep_obj["season"] == int(season) and ep_obj["episode"] in [int(e) for e in episodes]:
                                 ep_obj["status"] = 2
 
-            return {"status": "success", "message": f"成功下发，MP 将严格过滤并下载指定的 {len(episodes)} 集！"}
+            return {"status": "success", "message": f"成功下发！"}
             
         return {"status": "error", "message": f"MP 接口拒绝 (HTTP {res.status_code})"}
     except Exception as e: 
-        print(f"[缺集推送] 请求异常: {e}")
         return {"status": "error", "message": str(e)}

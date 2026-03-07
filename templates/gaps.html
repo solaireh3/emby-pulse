@@ -28,7 +28,7 @@
             </div>
             <div>
                 <h2 class="text-lg sm:text-xl font-black text-gray-900 dark:text-white tracking-tight">媒体库光谱扫描</h2>
-                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">防卡顿引擎与精确靶向下载已就绪</p>
+                <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">防卡顿分页引擎与 qB 底层接管已激活</p>
             </div>
         </div>
 
@@ -43,6 +43,10 @@
             
             <button @click="openIgnoreModal()" class="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition shadow-sm border border-transparent hover:border-gray-300 dark:hover:border-gray-500 whitespace-nowrap">
                 <i class="fa-solid fa-trash-can-arrow-up"></i> <span>回收站</span>
+            </button>
+            
+            <button @click="openConfigModal()" class="flex-1 md:flex-none flex items-center justify-center px-3 sm:px-3 py-2 rounded-xl text-xs sm:text-sm text-gray-500 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition shadow-sm border border-gray-200 dark:border-gray-700">
+                <i class="fa-solid fa-gear"></i>
             </button>
 
             <button @click="startScan()" :disabled="isScanning" class="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm active:scale-95 whitespace-nowrap"
@@ -132,36 +136,32 @@
         </button>
     </div>
 
-    <div x-show="!isScanning && hasScanned && gapData.length === 0" class="text-center py-20 sm:py-32" x-cloak>
-        <div class="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100 dark:border-emerald-800">
-            <i class="fa-solid fa-check-double text-3xl sm:text-4xl text-emerald-500"></i>
-        </div>
-        <h3 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">媒体库完美无暇</h3>
-        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">未发现任何可修补的断层，强迫症大满足。</p>
-    </div>
-
-    <div x-show="ignoreModal.open" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" x-cloak>
-        <div @click.away="closeIgnoreModal()" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-10 scale-95" x-transition:enter-end="opacity-100 translate-y-0 scale-100">
-            <div class="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/80 rounded-t-2xl">
-                <h3 class="font-black text-gray-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
-                    <i class="fa-solid fa-trash-can-arrow-up text-indigo-500"></i> 忽略与免检清单
+    <div x-show="configModal.open" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" x-cloak>
+        <div @click.away="closeConfigModal()" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md flex flex-col" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-10 scale-95" x-transition:enter-end="opacity-100 translate-y-0 scale-100">
+            <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/80 rounded-t-2xl">
+                <h3 class="font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> qBittorrent 底层接管配置
                 </h3>
-                <button @click="closeIgnoreModal()" class="text-gray-400 hover:text-rose-500 transition w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-sm border border-gray-200 dark:border-gray-600"><i class="fa-solid fa-xmark"></i></button>
+                <button @click="closeConfigModal()" class="text-gray-400 hover:text-rose-500 transition w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-700 rounded-full shadow-sm border border-gray-200 dark:border-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="flex-1 overflow-y-auto p-3 gap-scrollbar space-y-2">
-                <template x-for="item in ignoreModal.items" :key="item.id + item.target">
-                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 hover:bg-white dark:hover:bg-gray-700 rounded-xl border border-gray-100 dark:border-gray-700 transition">
-                        <div>
-                            <div class="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200" x-text="item.series_name"></div>
-                            <div class="text-[10px] text-gray-500 mt-1 flex gap-2 items-center">
-                                <span class="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded font-mono text-gray-700 dark:text-gray-300 font-bold" x-text="item.target"></span>
-                                <span x-text="item.time"></span>
-                            </div>
-                        </div>
-                        <button @click="unignoreItem(item)" class="px-3 py-1.5 bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white rounded-lg text-xs font-bold transition shadow-sm">取消忽略</button>
-                    </div>
-                </template>
-                <div x-show="ignoreModal.items.length === 0" class="text-center py-10 text-gray-400 text-sm tracking-widest"><i class="fa-solid fa-box-open text-4xl opacity-20 mb-3 block"></i>回收站是空的</div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">配置后，系统将在 MP 添加种子时隐秘连入 qB，精准剔除不需要的集数，实现完美补全。</p>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">qBittorrent 地址 (带端口)</label>
+                    <input type="text" x-model="configModal.qb_host" placeholder="http://192.168.31.2:8080" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">账号</label>
+                    <input type="text" x-model="configModal.qb_user" placeholder="admin" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">密码</label>
+                    <input type="password" x-model="configModal.qb_pass" placeholder="••••••••" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 rounded-b-2xl flex justify-end gap-3">
+                <button @click="closeConfigModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 transition shadow-sm">取消</button>
+                <button @click="saveConfig()" class="px-6 py-2 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-sm">保存引擎配置</button>
             </div>
         </div>
     </div>
@@ -202,7 +202,7 @@
                                     
                                     <template x-if="res.is_pack">
                                         <div class="mt-1 mb-0.5 inline-block text-[9px] px-1.5 py-0.5 rounded font-black border bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30">
-                                            📦 包含目标集的整季包 (将向 MP 发送手术刀指令，仅提取缺失集)
+                                            📦 包含目标集的整季包 (将自动向 qB 发送底层截胡指令)
                                         </div>
                                     </template>
 
@@ -235,7 +235,7 @@
                 <button x-show="resolver.targetType === 'single'" @click="ignoreGap()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600 transition shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-eye-slash"></i> <span class="hidden sm:inline">忽略单集</span></button>
                 <button @click="sendToMP()" :disabled="resolver.selectedIndex === null || resolver.isSubmitting" class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" :class="resolver.selectedIndex !== null ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 dark:bg-gray-600 shadow-none'">
                     <span x-show="resolver.isSubmitting" class="animate-spin w-4 h-4 border-2 border-white/30 border-t-white dark:border-black/30 dark:border-t-black rounded-full"></span>
-                    <span x-show="!resolver.isSubmitting">提交 MP 精确提取</span>
+                    <span x-show="!resolver.isSubmitting">提交并自动截胡</span>
                 </button>
             </div>
         </div>
@@ -265,12 +265,49 @@ document.addEventListener('alpine:init', () => {
         displayLimit: 24, 
         ignoreModal: { open: false, items: [] },
         
+        // 🔥 qB 截胡配置的变量
+        configModal: { open: false, qb_host: '', qb_user: '', qb_pass: '' },
+        
         resolver: { open: false, isLoading: false, isSubmitting: false, tmdbId: null, seriesId: '', seriesName: '', season: 0, episodes: [], targetDesc: '', targetType: 'single', genes: [], results: [], selectedIndex: null, sourceEpObj: null, sourceEpsArray: [] },
 
         init() { this.checkStatus(); this.fetchAutoScan(); },
 
         get displayedGaps() { return this.gapData.slice(0, this.displayLimit); },
         loadMore() { this.displayLimit += 24; },
+
+        // 加载或打开配置框
+        async openConfigModal() {
+            try {
+                const res = await fetch('/api/gaps/config');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    this.configModal.qb_host = data.data.qb_host || '';
+                    this.configModal.qb_user = data.data.qb_user || '';
+                    this.configModal.qb_pass = data.data.qb_pass || '';
+                }
+            } catch(e) {}
+            this.configModal.open = true;
+        },
+        closeConfigModal() { this.configModal.open = false; },
+        
+        async saveConfig() {
+            try {
+                const res = await fetch('/api/gaps/config', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        qb_host: this.configModal.qb_host,
+                        qb_user: this.configModal.qb_user,
+                        qb_pass: this.configModal.qb_pass
+                    }) 
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    this.closeConfigModal();
+                    alert("底层接管配置已保存，下发种子时将自动启动截胡！");
+                }
+            } catch(e) { alert('保存失败'); }
+        },
 
         async fetchAutoScan() {
             try { const res = await fetch('/api/gaps/scan/auto_status'); const data = await res.json(); if (data.status === 'success') { this.autoScan = data.enabled; } } catch(e) {}
@@ -431,10 +468,8 @@ document.addEventListener('alpine:init', () => {
                 const data = await res.json();
                 if (data.status === 'success') { 
                     this.closeResolver(); 
-                    
-                    // 🔥 绝杀动作：下发成功后，强制触发一次全局重绘！解决数字消失和不变蓝的死角！
                     await this.checkStatus();
-                    alert(data.message);
+                    // 这里去掉了弹窗 alert，给用户如丝般顺滑的无感体验，只要按钮变蓝就是成功
                 } else { 
                     alert(data.message); 
                 }
@@ -448,7 +483,6 @@ document.addEventListener('alpine:init', () => {
                 const data = await res.json();
                 if (data.status === 'success') { 
                     this.closeResolver(); 
-                    // 同样强制全局重绘
                     await this.checkStatus();
                 }
             } catch(e) {}

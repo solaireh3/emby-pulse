@@ -217,7 +217,7 @@ def unignore_item(payload: dict):
         return {"status": "success"}
     except Exception as e: return {"status": "error"}
 
-# 🔥 宽松数据模型，拒绝后端 422 报错
+# 🔥 Pydantic 请求模型强化：新增 tmdbid 参数支持
 class GapSearchReq(BaseModel): 
     series_id: str
     series_name: str
@@ -227,6 +227,7 @@ class GapSearchReq(BaseModel):
 class GapDownloadReq(BaseModel): 
     series_id: str
     series_name: str
+    tmdbid: Optional[Any] = None # 🔥 接收前端传来的精准识别码
     season: Any
     episodes: Optional[List[Any]] = []
     torrent_info: Dict[str, Any]
@@ -267,7 +268,6 @@ def search_mp_for_gap(req: GapSearchReq):
         results = []
         is_pack = False
         
-        # 1. 精确搜索单集
         if req.episodes and len(req.episodes) == 1:
             keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episodes[0]).zfill(2)}"
             mp_res = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={urllib.parse.quote(keyword)}", headers=headers, timeout=20)
@@ -275,7 +275,6 @@ def search_mp_for_gap(req: GapSearchReq):
             if isinstance(res_data, dict): res_data = res_data.get("data") or res_data.get("results") or []
             if isinstance(res_data, list): results = res_data
         
-        # 2. 降级搜索季包
         if len(results) == 0:
             fallback_kw = f"{req.series_name} S{str(req.season).zfill(2)}"
             mp_res2 = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={urllib.parse.quote(fallback_kw)}", headers=headers, timeout=20)
@@ -301,7 +300,6 @@ def search_mp_for_gap(req: GapSearchReq):
             if "HDR" in genes and "HDR" in combined_text: score += 20
             if "WEB" in combined_text: score += 10
             
-            # 🔥 MP 数据提纯机：丢弃私货，强制拼装 MP 官方所需的核心字段！
             org_payload = {k: v for k, v in r.items() if not k.startswith("ui_") and k not in ["match_score", "is_pack", "extracted_tags", "org_payload"]}
             org_payload["title"] = title_str
             org_payload["size"] = size_val
@@ -332,16 +330,26 @@ def download_gap_item(req: GapDownloadReq):
     mp_url = cfg.get("moviepilot_url"); mp_token = cfg.get("moviepilot_token")
     clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token, "Content-Type": "application/json"}
     
-    # 提取在 /search_mp 中提纯过的干净载荷
     pure_torrent_info = req.torrent_info.get("org_payload", req.torrent_info)
     
-    # 🔥 彻底对齐 MP 模型：传入 season 和 episode (注意是 episode 单数，接受数组！)
     if req.torrent_info.get("is_pack", False) or (req.episodes and len(req.episodes) > 1):
         pure_torrent_info["season"] = int(req.season)
         pure_torrent_info["episode"] = [int(e) for e in req.episodes] 
 
+    # 🔥 绝杀核心：根据 MP 源码要求，套上顶级 key `torrent_in` 解决 422 报错！
+    # 同时传入 tmdbid 实现 100% 精准刮削免填单入库
+    mp_payload = {
+        "torrent_in": pure_torrent_info
+    }
+    
+    if req.tmdbid:
+        try: mp_payload["tmdbid"] = int(req.tmdbid)
+        except: pass
+
     try:
-        res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=pure_torrent_info, timeout=10)
+        # 🔥 改用 /api/v1/download/add 接口，不要求传入 media_in，最适合静默补齐！
+        add_url = f"{mp_url.rstrip('/')}/api/v1/download/add"
+        res = requests.post(add_url, headers=headers, json=mp_payload, timeout=10)
         
         if res.status_code in [200, 201]:
             try:
@@ -353,7 +361,7 @@ def download_gap_item(req: GapDownloadReq):
             for ep in req.episodes:
                 query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (req.series_id, req.series_name, int(req.season), int(ep)))
             
-            return {"status": "success", "message": f"已向 MP 下发提纯指令，成功接单！"}
+            return {"status": "success", "message": f"已成功向 MP 下发 {len(req.episodes)} 集静默提取指令"}
             
         return {"status": "error", "message": f"MP 接口拒绝 (HTTP {res.status_code})"}
     except Exception as e: return {"status": "error", "message": str(e)}

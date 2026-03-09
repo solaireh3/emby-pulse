@@ -5,7 +5,26 @@
 async function toBase64(url) { try { const res = await fetch(url); if (!res.ok) throw new Error(`HTTP ${res.status}`); const blob = await res.blob(); return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); } catch (e) { return null; } }
 async function applyPhysicalBlur(base64Url) { return new Promise((resolve) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = 400; canvas.height = 800; ctx.filter = 'blur(40px) brightness(0.4)'; const scale = Math.max(canvas.width / img.width, canvas.height / img.height); ctx.drawImage(img, (canvas.width / 2) - (img.width / 2) * scale, (canvas.height / 2) - (img.height / 2) * scale, img.width * scale, img.height * scale); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.onerror = () => resolve(base64Url); img.src = base64Url; }); }
 window.tmdbCache = {};
-window.fallbackPoster = async function(img, title) { if (img.getAttribute('data-fallback-done')) return; img.setAttribute('data-fallback-done', 'true'); img.src = '/static/img/logo-app-2.png'; img.classList.add('opacity-30', 'object-contain', 'p-4'); try { const res = await fetch(`/api/requests/search?query=${encodeURIComponent(title)}`); const data = await res.json(); if (data.status === 'success' && data.data.length > 0) { const match = data.data.find(d => d.poster_path) || data.data[0]; if (match.poster_path) { img.src = match.poster_path; img.classList.remove('opacity-30', 'object-contain', 'p-4'); img.classList.add('object-cover'); } } } catch(e) {} };
+window.fallbackPoster = async function(img, title) { 
+    if (img.getAttribute('data-fallback-done')) return; 
+    img.setAttribute('data-fallback-done', 'true'); 
+    img.src = '/static/img/logo-app-2.png'; 
+    img.classList.add('opacity-30', 'object-contain', 'p-4'); 
+    // 终极拦截：如果是 undefined，直接终止，绝不发给后端！
+    if (!title || title === 'undefined' || title === 'null') return;
+    try { 
+        const res = await fetch(`/api/requests/search?query=${encodeURIComponent(title)}`); 
+        const data = await res.json(); 
+        if (data.status === 'success' && data.data.length > 0) { 
+            const match = data.data.find(d => d.poster_path) || data.data[0]; 
+            if (match.poster_path) { 
+                img.src = match.poster_path; 
+                img.classList.remove('opacity-30', 'object-contain', 'p-4'); 
+                img.classList.add('object-cover'); 
+            } 
+        } 
+    } catch(e) {} 
+};
 window.fallbackReportPoster = async function(imgEl, title) { if(imgEl.getAttribute('data-fallback-done')) return; imgEl.setAttribute('data-fallback-done', 'true'); imgEl.src = '/static/img/logo-app-2.png'; imgEl.style.objectFit = "contain"; imgEl.style.padding = "20px"; try { const res = await fetch(`/api/requests/search?query=${encodeURIComponent(title)}`); const data = await res.json(); if (data.status === 'success' && data.data.length > 0) { const match = data.data.find(d => d.poster_path) || data.data[0]; if (match.poster_path) { const b64 = await toBase64(match.poster_path); if(b64) { imgEl.src = b64; imgEl.style.objectFit = "cover"; imgEl.style.padding = "0"; } } } } catch(e) {} };
 
 document.addEventListener('alpine:init', () => {

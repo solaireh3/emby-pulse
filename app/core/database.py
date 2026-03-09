@@ -35,35 +35,26 @@ def init_db():
         print(f"❌ DB Init Error: {e}")
 
 
-# ==========================================
-# 🔥 核心防御武器：神级字典继承类 (解决前端为空的问题)
-# 既能像字典一样被 FastAPI 完美序列化给前端，又能像 sqlite3.Row 一样用 row[0] 获取
-# ==========================================
 class APIRow(dict):
+    """
+    终极伪装者：让 API 返回的普通字典不仅能支持 FastAPI 的无损 JSON 序列化，
+    还能像 sqlite3.Row 一样支持按索引(row[0])和忽略大小写的键名访问。
+    """
     def __init__(self, original_dict):
-        # 1. 继承父类 dict，这样 FastAPI 直接就能把它当成完美 JSON 返回给浏览器
         super().__init__(original_dict)
-        # 2. 缓存一份列表供数字索引访问
         self._vals = list(original_dict.values())
-        # 3. 缓存一份小写键名供忽略大小写访问
         self._lower_keys = {str(k).lower(): k for k in original_dict.keys()}
 
     def __getitem__(self, key):
-        # 支持 sqlite 的原生数字索引访问，如 row[0]
         if isinstance(key, int):
             try: return self._vals[key]
             except IndexError: return None
-        
         key_str = str(key)
-        # 直接匹配
         if super().__contains__(key_str):
             return super().__getitem__(key_str)
-            
-        # 忽略大小写匹配
         key_lower = key_str.lower()
         if key_lower in self._lower_keys:
             return super().__getitem__(self._lower_keys[key_lower])
-            
         return None
 
 def _interpolate_sql(query: str, args) -> str:
@@ -81,16 +72,20 @@ def _interpolate_sql(query: str, args) -> str:
 
 def query_db(query, args=(), one=False):
     # ==========================================
-    # 🔥 双擎路由拦截器 (API 穿透模式)
+    # 🔥 双擎路由拦截器
     # ==========================================
     mode = cfg.get("playback_data_mode", "sqlite")
     is_playback_query = "PlaybackActivity" in query or "PlaybackReporting" in query
+    
+    if is_playback_query:
+        print(f"\n[数据路由] 🚦 拦截到播放数据查询 -> 分发至: 【{mode.upper()} 引擎】")
     
     if mode == "api" and is_playback_query:
         host = cfg.get("emby_host")
         token = cfg.get("emby_api_key")
         if host and token:
             full_sql = _interpolate_sql(query, args)
+            print(f"[API 引擎] 📜 发送 SQL: {full_sql}")
             
             url = f"{host.rstrip('/')}/emby/user_usage_stats/submit_custom_query"
             headers = {"X-Emby-Token": token, "Content-Type": "application/json"}
@@ -98,8 +93,12 @@ def query_db(query, args=(), one=False):
             
             try:
                 res = requests.post(url, headers=headers, json=payload, timeout=20)
+                print(f"[API 引擎] 📡 收到响应码: {res.status_code}")
                 
                 if res.status_code == 200:
+                    # 💡 就是这里！我要看看 Emby 到底吐出了什么东西
+                    print(f"[API 引擎] 📦 原始数据长这样: {res.text[:800]}")
+                    
                     raw_data = None
                     try:
                         res_json = res.json()
@@ -113,26 +112,36 @@ def query_db(query, args=(), one=False):
                         except: raw_data = []
                     
                     if isinstance(raw_data, dict):
-                        raw_data = raw_data.get("results", raw_data.get("Items", [raw_data]))
+                        # 如果它是带着壳子的，脱去它的外壳
+                        if "results" in raw_data and isinstance(raw_data["results"], list):
+                            raw_data = raw_data["results"]
+                        elif "Items" in raw_data:
+                            raw_data = raw_data["Items"]
                         
                     if raw_data is None: raw_data = []
                     if not isinstance(raw_data, list): raw_data = [raw_data]
                     
-                    # 🔥 使用神级 APIRow 类包裹，前端不再罢工
                     data = [APIRow(item) if isinstance(item, dict) else item for item in raw_data]
 
                     if query.strip().upper().startswith("SELECT"):
                         return (data[0] if data else None) if one else data
                     return True
                 else:
-                    logger.error(f"[API 引擎] 拒绝请求: HTTP {res.status_code}")
+                    print(f"[API 引擎] ❌ 接口拒绝请求! 响应: {res.text[:200]}")
             except Exception as e:
-                logger.error(f"[API 引擎] 异常: {e}")
+                print(f"[API 引擎] ❌ 网络崩溃异常: {e}")
+        else:
+            print("[API 引擎] ⚠️ 警告: Emby Host 或 Token 未配置，降级回 SQLite。")
             
     # ==========================================
     # 🚂 原版 SQLite 执行器 (处理非播放表及降级情况)
     # ==========================================
+    if is_playback_query and mode != "api":
+        print(f"[SQLite 引擎] 📂 使用本地数据库: {DB_PATH}")
+
     if not os.path.exists(DB_PATH): 
+        if is_playback_query:
+            print(f"[SQLite 引擎] ❌ 找不到文件: {DB_PATH}")
         return None
         
     try:
@@ -149,7 +158,8 @@ def query_db(query, args=(), one=False):
             conn.close()
             return True
     except Exception as e: 
-        logger.error(f"[SQLite] 崩溃: {e}")
+        if is_playback_query:
+            print(f"[SQLite 引擎] 💥 执行失败: {e}")
         return None
 
 def get_base_filter(user_id_filter):

@@ -106,7 +106,7 @@
             <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 shadow-sm"><h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 播放软件偏好</h4><div class="relative h-32 w-full"><canvas id="profileClientChart"></canvas></div></div>
         </div>
 
-        <div class="glass-panel p-5 rounded-3xl mt-5 mb-10 border-t border-white/40 dark:border-white/5 shadow-sm">
+        <div class="glass-panel p-5 rounded-3xl mt-5 mb-4 border-t border-white/40 dark:border-white/5 shadow-sm">
             <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-shoe-prints text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <template x-for="log in (userStats?.logs || []).slice(0, 14)" :key="log.DateCreated || log.ItemId">

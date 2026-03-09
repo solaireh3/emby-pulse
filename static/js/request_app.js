@@ -1,5 +1,5 @@
 /* ============================================================
-   EmbyPulse 玩家社区 - 核心逻辑驱动 (全能终极版 v2)
+   EmbyPulse 玩家社区 - 核心逻辑驱动 (高容错稳定版)
    ============================================================ */
 
 async function toBase64(url) { try { const res = await fetch(url); if (!res.ok) throw new Error(`HTTP ${res.status}`); const blob = await res.blob(); return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); } catch (e) { return null; } }
@@ -14,7 +14,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('requestApp', () => ({
         scrolled: false, lastScrollTop: 0, isScrollingDown: false, isLoaded: false, isLoggedIn: false, isDarkMode: false,
         userId: '', userName: '', expireDate: '未知', serverUrl: '', showServerUrl: false, loginForm: { username: '', password: '' }, isLoggingIn: false,
-        currentTab: 'explore', searchQuery: '', isSearching: false, searchResults: [], recommendResults: [],
+        currentTab: 'explore', searchQuery: '', isSearching: false, searchResults: [], recommendResults: [], recommendRow1: [], recommendRow2: [], recommendRow3: [],
         serverDashboard: null, serverLatest: [], serverTopRated: [], serverGenres: [], serverTopMovies: [], serverTopSeries: [],
         showcaseModal: { open: false, isLoading: false, data: null }, queueModal: { open: false, activeTab: 'request' }, myQueue: [], myFeedbacks: [],
         userStats: null, userBadges: [], userTrend: null, isStatsLoading: false, statsLoaded: false, charts: { hour: null, device: null, client: null, trend: null },
@@ -40,18 +40,16 @@ document.addEventListener('alpine:init', () => {
                 const res = await fetch(`/api/requests/trending`); 
                 const data = await res.json(); 
                 if(data.status === 'success' && data.data && data.data.length > 0) { 
-                    // 打乱顺序，让每次进来的海报墙都不一样
                     let validItems = data.data.sort(() => 0.5 - Math.random());
                     this.recommendResults = validItems;
-                    
-                    // 将 40 部海报平均切分成 3 份，喂给 3 条跑马灯轨道
                     const third = Math.ceil(validItems.length / 3);
                     this.recommendRow1 = validItems.slice(0, third);
                     this.recommendRow2 = validItems.slice(third, third * 2);
                     this.recommendRow3 = validItems.slice(third * 2);
                 } 
-            } catch(e) { console.log("获取趋势海报失败"); }
+            } catch(e) { console.log("无热门数据"); }
         },
+
         switchTab(tab) { this.currentTab = tab; this.$nextTick(() => window.scrollTo(0, 0)); if (tab === 'profile') { if (!this.statsLoaded) this.loadProfileStats(); else setTimeout(() => this.renderCharts(), 150); } },
 
         async openShowcaseModal(itemId, fallbackItem = null) { const finalId = itemId || (fallbackItem ? fallbackItem.ItemId || fallbackItem.Id : ''); this.showcaseModal.data = fallbackItem || { Name: '加载中...' }; this.showcaseModal.open = true; this.showcaseModal.isLoading = true; document.body.style.overflow = 'hidden'; try { const res = await fetch(`/api/requests/item_info?item_id=${finalId}`); if(res.ok) { const data = await res.json(); if (data.status === 'success') this.showcaseModal.data = data.data; } } catch(e) {} finally { this.showcaseModal.isLoading = false; } },
@@ -66,33 +64,37 @@ document.addEventListener('alpine:init', () => {
 
         async loadProfileStats() { if (this.statsLoaded || !this.userId) return; this.isStatsLoading = true; try { const [stats, badges, trend] = await Promise.all([ fetch(`/api/stats/user_details?user_id=${this.userId}`).then(r => r.json()), fetch(`/api/stats/badges?user_id=${this.userId}`).then(r => r.json()), fetch(`/api/stats/trend?dimension=day&user_id=${this.userId}`).then(r => r.json()) ]); if (stats.status === 'success') this.userStats = stats.data; if (badges.status === 'success') this.userBadges = badges.data; if (trend.status === 'success') this.userTrend = trend.data; this.statsLoaded = true; this.renderCharts(); } catch(e) {} this.isStatsLoading = false; },
 
+        // 🚨 修复画像白屏：极强数据容错保护 
         renderCharts() {
             this.$nextTick(() => {
-                if (!window.Chart || !this.userStats) return;
-                const isDark = this.isDarkMode; const textColor = isDark ? '#a1a1aa' : '#64748b'; 
-                const macaronColors = ['#10b981', '#3b82f6', '#8b5cf6', '#6366f1', '#14b8a6', '#64748b'];
-                const warmColors = ['#f43f5e', '#f59e0b', '#ec4899', '#f97316', '#d946ef', '#64748b'];
-                
-                if (document.getElementById('profileHourChart')) { if (this.charts.hour) this.charts.hour.destroy(); const ctx = document.getElementById('profileHourChart').getContext('2d'); let labels = [], values = []; for(let i=0; i<24; i++) { labels.push(String(i).padStart(2, '0')); values.push(this.userStats.hourly[String(i).padStart(2, '0')] || 0); } this.charts.hour = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ data: values, backgroundColor: isDark ? '#818cf8' : '#6366f1', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: textColor, font: {size: 9} } }, y: { display: false } } } }); }
-                if (document.getElementById('profileTrendChart') && this.userTrend) { if (this.charts.trend) this.charts.trend.destroy(); const ctx = document.getElementById('profileTrendChart').getContext('2d'); const labels = Object.keys(this.userTrend).map(k => k.substring(5)); const values = Object.values(this.userTrend).map(v => Math.round(v/3600)); this.charts.trend = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ data: values, borderColor: isDark ? '#38bdf8' : '#0ea5e9', backgroundColor: isDark ? 'rgba(56,189,248,0.15)' : 'rgba(14,165,233,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: textColor, maxTicksLimit: 6, font: {size: 9} } }, y: { display: false } } } }); }
-                
-                if (document.getElementById('profileDeviceChart') && this.userStats.devices) {
-                    if (this.charts.device) this.charts.device.destroy();
-                    const ctx = document.getElementById('profileDeviceChart').getContext('2d');
-                    let labels = [], values = [], others = 0;
-                    this.userStats.devices.forEach((d, i) => { let name = d.Device || d.device || d.name || d.Client || '未知'; let val = d.Plays || d.count || 0; if(i<4){ labels.push(name); values.push(val); } else { others += val; } });
-                    if(others > 0){ labels.push('其他'); values.push(others); }
-                    this.charts.device = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data: values, backgroundColor: macaronColors, borderWidth: 2, borderColor: isDark ? '#000' : '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: {size: 9}, color: textColor } } } } });
-                }
-                
-                if (document.getElementById('profileClientChart') && this.userStats.clients) {
-                    if (this.charts.client) this.charts.client.destroy();
-                    const ctx = document.getElementById('profileClientChart').getContext('2d');
-                    let labels = [], values = [], others = 0;
-                    this.userStats.clients.forEach((c, i) => { let name = c.Client || c.client || c.name || '未知'; let val = c.Plays || c.count || 0; if(i<4){ labels.push(name); values.push(val); } else { others += val; } });
-                    if(others > 0){ labels.push('其他'); values.push(others); }
-                    this.charts.client = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data: values, backgroundColor: warmColors, borderWidth: 2, borderColor: isDark ? '#000' : '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: {size: 9}, color: textColor } } } } });
-                }
+                try {
+                    if (!window.Chart || !this.userStats) return;
+                    const isDark = this.isDarkMode; const textColor = isDark ? '#a1a1aa' : '#64748b'; 
+                    const macaronColors = ['#10b981', '#3b82f6', '#8b5cf6', '#6366f1', '#14b8a6', '#64748b'];
+                    const warmColors = ['#f43f5e', '#f59e0b', '#ec4899', '#f97316', '#d946ef', '#64748b'];
+                    
+                    const hourlyData = this.userStats.hourly || {};
+                    if (document.getElementById('profileHourChart')) { if (this.charts.hour) this.charts.hour.destroy(); const ctx = document.getElementById('profileHourChart').getContext('2d'); let labels = [], values = []; for(let i=0; i<24; i++) { labels.push(String(i).padStart(2, '0')); values.push(hourlyData[String(i).padStart(2, '0')] || 0); } this.charts.hour = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ data: values, backgroundColor: isDark ? '#818cf8' : '#6366f1', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: textColor, font: {size: 9} } }, y: { display: false } } } }); }
+                    
+                    const trendData = this.userTrend || {};
+                    if (document.getElementById('profileTrendChart') && Object.keys(trendData).length > 0) { if (this.charts.trend) this.charts.trend.destroy(); const ctx = document.getElementById('profileTrendChart').getContext('2d'); const labels = Object.keys(trendData).map(k => k.substring(5)); const values = Object.values(trendData).map(v => Math.round(v/3600)); this.charts.trend = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ data: values, borderColor: isDark ? '#38bdf8' : '#0ea5e9', backgroundColor: isDark ? 'rgba(56,189,248,0.15)' : 'rgba(14,165,233,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: textColor, maxTicksLimit: 6, font: {size: 9} } }, y: { display: false } } } }); }
+                    
+                    const devices = this.userStats.devices || [];
+                    if (document.getElementById('profileDeviceChart') && devices.length > 0) {
+                        if (this.charts.device) this.charts.device.destroy(); const ctx = document.getElementById('profileDeviceChart').getContext('2d'); let labels = [], values = [], others = 0;
+                        devices.forEach((d, i) => { let name = d.Device || d.device || d.name || d.Client || '未知'; let val = d.Plays || d.count || 0; if(i<4){ labels.push(name); values.push(val); } else { others += val; } });
+                        if(others > 0){ labels.push('其他'); values.push(others); }
+                        this.charts.device = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data: values, backgroundColor: macaronColors, borderWidth: 2, borderColor: isDark ? '#000' : '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: {size: 9}, color: textColor } } } } });
+                    }
+                    
+                    const clients = this.userStats.clients || [];
+                    if (document.getElementById('profileClientChart') && clients.length > 0) {
+                        if (this.charts.client) this.charts.client.destroy(); const ctx = document.getElementById('profileClientChart').getContext('2d'); let labels = [], values = [], others = 0;
+                        clients.forEach((c, i) => { let name = c.Client || c.client || c.name || '未知'; let val = c.Plays || c.count || 0; if(i<4){ labels.push(name); values.push(val); } else { others += val; } });
+                        if(others > 0){ labels.push('其他'); values.push(others); }
+                        this.charts.client = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data: values, backgroundColor: warmColors, borderWidth: 2, borderColor: isDark ? '#000' : '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: {size: 9}, color: textColor } } } } });
+                    }
+                } catch (e) { console.error("图表数据不完整，跳过渲染保护白屏", e); }
             });
         },
 

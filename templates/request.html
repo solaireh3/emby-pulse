@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>用户中心 - EmbyPulse</title>
+    <title>玩家社区 - EmbyPulse</title>
     
     <link rel="manifest" href="/request_manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="用户中心">
-    <link rel="apple-touch-icon" href="/static/img/logo-app.png">
+    <meta name="apple-mobile-web-app-title" content="玩家社区">
+    <link rel="apple-touch-icon" href="/static/img/logo-app-2.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -33,7 +33,6 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* 🔥 完美修复：只对暗色模式强制底层纯黑防露底，亮色模式彻底放权给 Body 的原生渐变与光晕 */
         html.dark { background-color: #000000; }
 
         html, body {
@@ -75,16 +74,16 @@
     <div x-show="!isLoggedIn && isLoaded" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 dark:bg-black/80 backdrop-blur-md" x-cloak>
         <div class="w-full max-w-md glass-panel rounded-3xl p-8 relative overflow-hidden">
             <div class="text-center mb-8 relative z-10">
-                <img src="/static/img/logo-app.png" class="w-16 h-16 mx-auto mb-4 drop-shadow-lg rounded-2xl object-contain">
-                <h2 class="text-2xl font-extrabold tracking-tight">用户中心</h2>
-                <p class="text-slate-500 dark:text-zinc-400 mt-2 text-sm">请输入 Emby 账号密码</p>
+                <img src="/static/img/logo-app-2.png" class="w-16 h-16 mx-auto mb-4 drop-shadow-lg rounded-2xl object-contain">
+                <h2 class="text-2xl font-extrabold tracking-tight">玩家社区</h2>
+                <p class="text-slate-500 dark:text-zinc-400 mt-2 text-sm">请输入 Emby 账号密码登录</p>
             </div>
             <form @submit.prevent="login()" class="space-y-5 relative z-10">
                 <input type="text" x-model="loginForm.username" placeholder="账号" required class="w-full px-4 py-3.5 rounded-2xl bg-white/60 dark:bg-white/5 border border-slate-200 dark:border-white/5 focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder-slate-400 dark:placeholder-zinc-500">
                 <input type="password" x-model="loginForm.password" placeholder="密码" required class="w-full px-4 py-3.5 rounded-2xl bg-white/60 dark:bg-white/5 border border-slate-200 dark:border-white/5 focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder-slate-400 dark:placeholder-zinc-500">
                 <button type="submit" :disabled="isLoggingIn" class="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-brand-500 to-blue-500 hover:from-brand-600 hover:to-blue-600 shadow-xl shadow-brand-500/20 transition-all flex items-center justify-center gap-2">
                     <span x-show="isLoggingIn" class="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></span>
-                    <span x-show="!isLoggingIn">进入中心</span>
+                    <span x-show="!isLoggingIn">进入社区</span>
                 </button>
             </form>
         </div>
@@ -94,43 +93,26 @@
         
         <nav class="fixed top-0 w-full z-40 glass-panel border-b border-slate-200/50 dark:border-white/5 rounded-none transition-all duration-300" :class="scrolled ? 'shadow-md dark:shadow-white/5' : ''">
             <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-                
-                <div class="flex items-center gap-2 sm:gap-3 shrink-0 transition-all duration-300" :class="scrolled ? 'w-0 overflow-hidden opacity-0 sm:w-auto sm:opacity-100 sm:overflow-visible' : 'w-auto opacity-100'">
-                    <img src="/static/img/logo-app.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shadow-sm shrink-0 object-contain bg-white dark:bg-transparent">
-                    <h1 class="text-base sm:text-lg font-bold tracking-wide text-slate-800 dark:text-zinc-100 whitespace-nowrap">EmbyPulse</h1>
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <img src="/static/img/logo-app-2.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shadow-sm shrink-0 object-contain bg-white dark:bg-transparent">
+                    <h1 class="text-base sm:text-lg font-bold tracking-wide text-slate-800 dark:text-zinc-100 whitespace-nowrap">Emby 玩家社区</h1>
                 </div>
                 
-                <div class="flex-1 transition-all duration-500 ease-in-out flex items-center"
-                     :class="{
-                        'opacity-100 translate-x-0': scrolled,
-                        'opacity-0 pointer-events-none': !scrolled,
-                        'translate-x-8': !scrolled && currentTab === 'explore',
-                        '-translate-x-4': !scrolled && currentTab !== 'explore',
-                        'justify-end sm:justify-center': currentTab === 'explore',
-                        'justify-start sm:justify-center': currentTab !== 'explore'
-                     }">
-                    
-                    <form x-show="currentTab === 'explore'" @submit.prevent="searchMedia()" class="relative flex items-center bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/5 rounded-full px-3 py-1.5 w-full max-w-md shadow-sm transition-all focus-within:ring-2 focus-within:ring-brand-500/50">
-                        <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        <input type="text" x-model="searchQuery" placeholder="搜索你想看的..." class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none px-2 text-slate-900 dark:text-white placeholder-slate-400">
-                    </form>
-
-                    <div x-show="currentTab === 'queue'" class="px-4 py-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-full shadow-sm flex items-center gap-1.5">
-                        <span class="text-sm font-bold text-brand-600 dark:text-brand-400">📝 进度与反馈</span>
-                    </div>
-
-                    <div x-show="currentTab === 'profile'" class="px-4 py-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-full shadow-sm flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" @click="window.scrollTo(0, 0)">
-                        <img :src="'/api/proxy/user_image/' + userId" class="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 dark:ring-white/10" onerror="this.src='https://api.dicebear.com/9.x/notionists/png?seed=User'">
-                        <span class="text-sm font-bold text-brand-600 dark:text-brand-400" x-text="userName"></span>
+                <div class="flex-1 flex justify-end items-center pr-2">
+                    <div x-show="currentTab === 'explore'" class="px-3 py-1 bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-full shadow-sm text-xs font-bold text-brand-600 dark:text-brand-400"><i class="fa-solid fa-compass mr-1"></i> 全站大厅</div>
+                    <div x-show="currentTab === 'request'" class="px-3 py-1 bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-full shadow-sm text-xs font-bold text-brand-600 dark:text-brand-400"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 心愿工坊</div>
+                    <div x-show="currentTab === 'profile'" class="px-3 py-1 bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-full shadow-sm text-xs font-bold text-brand-600 dark:text-brand-400 flex items-center gap-1.5 cursor-pointer" @click="window.scrollTo(0, 0)">
+                        <img :src="'/api/proxy/user_image/' + userId" class="w-4 h-4 rounded-full object-cover">
+                        <span x-text="userName"></span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-1 shrink-0 ml-2">
-                    <button @click="toggleTheme()" class="p-2.5 rounded-full hover:bg-slate-200/50 dark:hover:bg-white/5 text-slate-500 dark:text-zinc-400 transition-colors">
+                <div class="flex items-center gap-1 shrink-0 border-l border-slate-200 dark:border-white/10 pl-2">
+                    <button @click="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200/50 dark:hover:bg-white/5 text-slate-500 dark:text-zinc-400 transition-colors">
                         <svg x-show="!isDarkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                         <svg x-show="isDarkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                     </button>
-                    <button @click="logout()" class="p-2.5 rounded-full hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 dark:text-zinc-400 hover:text-red-500 transition-colors" title="退出登录">
+                    <button @click="logout()" class="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 dark:text-zinc-400 hover:text-red-500 transition-colors" title="退出登录">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </button>
                 </div>
@@ -139,319 +121,280 @@
 
         <main class="pt-24 mx-auto px-4 pb-24 sm:pb-28 transition-all duration-300" :class="currentTab === 'profile' ? 'max-w-6xl' : 'max-w-7xl'">
             
-            <div x-show="currentTab === 'explore'" class="text-center py-6 space-y-3 transition-all duration-300" :class="scrolled ? 'opacity-0 scale-95 h-0 overflow-hidden py-0 mb-0' : 'opacity-100 scale-100'">
-                <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight">探索宇宙，一键追剧</h2>
-            </div>
-
-            <div x-show="currentTab === 'explore'" class="max-w-2xl mx-auto relative group mb-10 transition-all duration-500 origin-top"
-                 :class="scrolled ? 'opacity-0 scale-90 pointer-events-none -translate-y-4' : 'opacity-100 scale-100 translate-y-0'">
-                <div class="absolute -inset-0.5 bg-gradient-to-r from-brand-400 to-blue-500 rounded-full blur opacity-20 group-hover:opacity-40 dark:opacity-30 transition duration-500"></div>
-                <form @submit.prevent="searchMedia()" class="relative flex items-center bg-white/80 dark:bg-black/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-full p-2 shadow-sm focus-within:ring-2 focus-within:ring-brand-500/50 transition-all">
-                    <input type="text" x-model="searchQuery" placeholder="搜索你想看的电影或剧集..." class="w-full bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 px-6 py-3 outline-none text-lg">
-                    <button type="submit" class="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 p-3 rounded-full transition-transform active:scale-90 shadow-md">
-                        <svg x-show="!isSearching" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        <svg x-show="isSearching" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    </button>
-                </form>
-            </div>
-
-            <div class="min-h-[500px]">
+            <div x-show="currentTab === 'explore'" x-transition.opacity.duration.300ms class="min-h-[500px]">
                 
-                <div x-show="currentTab === 'explore'" x-transition.opacity.duration.300ms>
-                    <div x-show="searchResults.length > 0" class="mb-10">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-xl font-bold flex items-center gap-2">🔍 搜索结果</h3>
-                            <button @click="searchResults = []; searchQuery = ''" class="text-sm font-bold text-slate-400 hover:text-brand-500 transition-colors bg-white/50 dark:bg-white/5 px-3 py-1 rounded-full">清除结果</button>
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                            <template x-for="item in searchResults" :key="item.tmdb_id">
-                                <div @click="openModal(item)" class="poster-card relative rounded-2xl overflow-hidden cursor-pointer bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md flex flex-col">
-                                    <img :src="item.poster_path || 'https://via.placeholder.com/500x750?text=No+Poster'" class="w-full h-full object-cover">
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                                        <div class="text-xs font-bold px-2 py-1 bg-brand-500 rounded text-white self-start mb-2" x-text="item.media_type === 'movie' ? '电影' : '剧集'"></div>
-                                        <h4 class="font-bold text-white line-clamp-2" x-text="item.title"></h4>
-                                        <div class="flex items-center justify-between mt-1 text-sm text-zinc-300">
-                                            <span x-text="item.year"></span>
-                                            <span class="flex items-center gap-1 text-yellow-400 font-bold">★ <span x-text="item.vote_average"></span></span>
-                                        </div>
-                                    </div>
-                                    <div x-show="item.local_status === 1" class="absolute top-2 left-2 px-2 py-1 bg-green-500 text-white text-[10px] font-bold rounded shadow-md z-10">✅ 已在库</div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <div x-show="searchResults.length === 0">
-                        <div x-show="trendingMovies.length > 0" class="mb-10">
-                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">🔥 本周热门电影</h3>
-                            <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
-                                <template x-for="item in trendingMovies" :key="item.tmdb_id">
-                                    <div @click="if(!isDragging) openModal(item)" class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md">
-                                        <img :src="item.poster_path" class="w-full h-full object-cover pointer-events-none" loading="lazy">
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
-                                            <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight" x-text="item.title"></h4>
-                                            <span class="text-xs text-zinc-300 mt-1 flex items-center gap-1 text-yellow-400 font-bold">★ <span x-text="item.vote_average"></span></span>
-                                        </div>
-                                    </div>
-                                </template>
+                <div class="glass-panel rounded-3xl p-6 sm:p-8 mb-10 text-center relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-brand-500/10 to-blue-500/10 z-0"></div>
+                    <div class="relative z-10">
+                        <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">我们的媒体宇宙</h2>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-white/60 dark:bg-black/40 rounded-2xl p-4 border border-slate-200/50 dark:border-white/5 shadow-sm">
+                                <div class="text-2xl sm:text-3xl font-black text-brand-600 dark:text-brand-400 mb-1" x-text="serverDashboard?.library?.movie || '-'"></div>
+                                <div class="text-xs font-bold text-slate-500 tracking-widest">收录电影</div>
                             </div>
-                        </div>
-
-                        <div x-show="trendingTv.length > 0" class="mb-10">
-                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">📺 霸榜高分剧集</h3>
-                            <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
-                                <template x-for="item in trendingTv" :key="item.tmdb_id">
-                                    <div @click="if(!isDragging) openModal(item)" class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md">
-                                        <img :src="item.poster_path" class="w-full h-full object-cover pointer-events-none" loading="lazy">
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
-                                            <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight" x-text="item.title"></h4>
-                                            <span class="text-xs text-zinc-300 mt-1 flex items-center gap-1 text-yellow-400 font-bold">★ <span x-text="item.vote_average"></span></span>
-                                        </div>
-                                    </div>
-                                </template>
+                            <div class="bg-white/60 dark:bg-black/40 rounded-2xl p-4 border border-slate-200/50 dark:border-white/5 shadow-sm">
+                                <div class="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1" x-text="serverDashboard?.library?.series || '-'"></div>
+                                <div class="text-xs font-bold text-slate-500 tracking-widest">收录剧集</div>
                             </div>
-                        </div>
-
-                        <div x-show="topMovies.length > 0" class="mb-10">
-                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-brand-600 dark:text-brand-400">🏆 影史高分神作</h3>
-                            <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
-                                <template x-for="item in topMovies" :key="item.tmdb_id">
-                                    <div @click="if(!isDragging) openModal(item)" class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md">
-                                        <img :src="item.poster_path" class="w-full h-full object-cover pointer-events-none" loading="lazy">
-                                        <div class="absolute top-2 right-2 bg-black/60 text-yellow-400 text-xs font-bold px-1.5 py-0.5 rounded backdrop-blur-md">★ <span x-text="item.vote_average"></span></div>
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
-                                            <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight" x-text="item.title"></h4>
-                                        </div>
-                                    </div>
-                                </template>
+                            <div class="bg-white/60 dark:bg-black/40 rounded-2xl p-4 border border-slate-200/50 dark:border-white/5 shadow-sm">
+                                <div class="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mb-1" x-text="serverDashboard?.library?.episode || '-'"></div>
+                                <div class="text-xs font-bold text-slate-500 tracking-widest">总集数</div>
                             </div>
-                        </div>
-
-                        <div x-show="topTv.length > 0" class="mb-10">
-                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-brand-600 dark:text-brand-400">🌟 必看满分神剧</h3>
-                            <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
-                                <template x-for="item in topTv" :key="item.tmdb_id">
-                                    <div @click="if(!isDragging) openModal(item)" class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md">
-                                        <img :src="item.poster_path" class="w-full h-full object-cover pointer-events-none" loading="lazy">
-                                        <div class="absolute top-2 right-2 bg-black/60 text-yellow-400 text-xs font-bold px-1.5 py-0.5 rounded backdrop-blur-md">★ <span x-text="item.vote_average"></span></div>
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
-                                            <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight" x-text="item.title"></h4>
-                                        </div>
-                                    </div>
-                                </template>
+                            <div class="bg-white/60 dark:bg-black/40 rounded-2xl p-4 border border-slate-200/50 dark:border-white/5 shadow-sm">
+                                <div class="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 mb-1" x-text="serverDashboard?.total_plays || '-'"></div>
+                                <div class="text-xs font-bold text-slate-500 tracking-widest">历史总播放</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div x-show="currentTab === 'queue'" x-transition.opacity.duration.300ms x-cloak class="max-w-4xl mx-auto">
-                    
-                    <div class="flex items-center justify-between mb-8 border-b border-slate-200 dark:border-white/10 pb-4">
-                        <div class="bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl p-1 rounded-full inline-flex relative shadow-sm border border-slate-200 dark:border-white/5">
-                            <div class="absolute inset-y-1 left-1 w-[calc(50%-4px)] bg-slate-100 dark:bg-[#1a1a1a] rounded-full transition-transform duration-300 ease-out border border-slate-200 dark:border-white/5" :class="queueTab === 'feedback' ? 'translate-x-full' : 'translate-x-0'"></div>
-                            <button @click="queueTab = 'request'; loadQueue()" class="w-24 sm:w-32 relative z-10 py-1.5 sm:py-2 text-xs sm:text-sm font-bold transition-colors" :class="queueTab === 'request' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400'">🎬 求片进度</button>
-                            <button @click="queueTab = 'feedback'; loadMyFeedback()" class="w-24 sm:w-32 relative z-10 py-1.5 sm:py-2 text-xs sm:text-sm font-bold transition-colors" :class="queueTab === 'feedback' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400'">⚠️ 报错追踪</button>
-                        </div>
-
-                        <button @click="queueTab === 'request' ? loadQueue() : loadMyFeedback(); isSpinning = true; setTimeout(() => isSpinning = false, 800); showToast('已获取最新状态')" 
-                                class="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-brand-600 dark:text-brand-400 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full transition-colors"
-                                x-data="{ isSpinning: false }">
-                            <svg :class="{'animate-spin': isSpinning}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                            <span class="hidden sm:inline">刷新</span>
-                        </button>
+                <div x-show="serverLatest.length > 0" class="mb-10">
+                    <div class="flex items-center justify-between mb-4 px-1">
+                        <h3 class="text-lg sm:text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white"><i class="fa-solid fa-bolt text-brand-500"></i> 最新收录资源</h3>
+                        <button @click="loadServerData(); showToast('已同步最新数据')" class="text-xs text-slate-400 hover:text-brand-500 transition-colors"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
                     </div>
-
-                    <div x-show="queueTab === 'request'">
-                        <div x-show="myQueue.length === 0" class="text-center py-24 text-slate-400 dark:text-zinc-600">
-                            <span class="text-6xl block mb-4 opacity-50">🛸</span>
-                            <p class="font-medium">暂无求片记录，去大厅许个愿吧</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <template x-for="item in myQueue" :key="item.tmdb_id + '_' + item.season">
-                                <div class="glass-panel p-3 rounded-2xl flex gap-4 items-center relative overflow-hidden group">
-                                    <img :src="item.poster_path" class="w-20 rounded-xl shadow-md aspect-[2/3] object-cover bg-slate-200 dark:bg-[#111] relative z-10">
-                                    <div class="flex-1 relative z-10">
-                                        <h4 class="font-bold text-lg line-clamp-1 text-slate-900 dark:text-white" x-text="item.title"></h4>
-                                        <div class="text-sm font-medium text-slate-500 dark:text-zinc-400 mt-1 mb-3" x-text="item.media_type === 'tv' ? `${item.year} · 第 ${item.season} 季` : item.year"></div>
-                                        
-                                        <span x-show="item.status === 0" class="px-3 py-1.5 bg-slate-200 dark:bg-[#1a1a1a] text-slate-600 dark:text-zinc-300 rounded-full text-xs font-bold border border-slate-300 dark:border-white/10">审核中</span>
-                                        <span x-show="item.status === 1 || item.status === 4" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-200 dark:border-blue-500/30 inline-flex items-center gap-1.5"><span class="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></span> 下载/处理中</span>
-                                        <span x-show="item.status === 2" class="px-3 py-1.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full text-xs font-bold border border-green-300 dark:border-green-500/30">✅ 已入库</span>
-                                        
-                                        <div x-show="item.status === 3" class="flex flex-col items-start gap-1.5 mt-1">
-                                            <span class="px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-300 dark:border-red-500/30">❌ 已拒绝</span>
-                                            <span x-show="item.reject_reason" class="text-xs font-medium text-red-500/80 dark:text-red-400/80 pl-2 border-l-2 border-red-300 dark:border-red-500/50">原因: <span x-text="item.reject_reason"></span></span>
-                                        </div>
-                                    </div>
+                    <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
+                        <template x-for="item in serverLatest" :key="item.Id">
+                            <div class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md" @click="if(!isDragging) { window.open(serverUrl + '/web/index.html#!/item?id=' + item.Id, '_blank'); }">
+                                <img :src="`/api/proxy/smart_image?item_id=${item.Id}&type=Primary`" class="w-full h-full object-cover pointer-events-none" loading="lazy">
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
+                                    <div class="text-[10px] font-bold px-1.5 py-0.5 bg-brand-500 rounded text-white self-start mb-1" x-text="item.Type === 'Movie' ? '电影' : '剧集'"></div>
+                                    <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight mb-1" x-text="item.Name"></h4>
+                                    <span class="text-xs text-zinc-300 flex items-center gap-1 text-yellow-400 font-bold" x-show="item.Rating">★ <span x-text="item.Rating"></span></span>
                                 </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <div x-show="queueTab === 'feedback'" x-cloak>
-                        <div x-show="myFeedbacks.length === 0" class="text-center py-24 text-slate-400 dark:text-zinc-600">
-                            <span class="text-6xl block mb-4 opacity-50">✨</span>
-                            <p class="font-medium">没有任何报错记录，观影愉快！</p>
-                        </div>
-                        <div class="space-y-4">
-                            <template x-for="feed in myFeedbacks" :key="feed.id">
-                                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-2 border-l-4" :class="feed.status === 0 ? 'border-l-red-400' : (feed.status === 1 ? 'border-l-blue-400' : (feed.status === 2 ? 'border-l-green-400' : 'border-l-gray-500'))">
-                                    <div class="flex justify-between items-start">
-                                        <h4 class="font-bold text-slate-900 dark:text-white" x-text="feed.item_name"></h4>
-                                        <span x-show="feed.status === 0" class="text-[10px] bg-slate-200 dark:bg-[#1a1a1a] text-slate-600 dark:text-zinc-300 px-2 py-1 rounded-md font-bold">待核实</span>
-                                        <span x-show="feed.status === 1" class="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-md font-bold">🛠️ 修复中</span>
-                                        <span x-show="feed.status === 2" class="text-[10px] bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 px-2 py-1 rounded-md font-bold">✅ 已解决</span>
-                                        <span x-show="feed.status === 3" class="text-[10px] bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md font-bold">❌ 忽略</span>
-                                    </div>
-                                    <p class="text-xs text-rose-500 font-bold" x-text="'标签：' + feed.issue_type"></p>
-                                    <p class="text-xs text-slate-500 dark:text-zinc-400 bg-white/50 dark:bg-white/5 p-2 rounded-lg" x-show="feed.description" x-text="feed.description"></p>
-                                    <p class="text-[10px] text-slate-400 mt-2" x-text="feed.created_at"></p>
-                                </div>
-                            </template>
-                        </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
-                <div x-show="currentTab === 'profile'" x-transition.opacity.duration.300ms x-cloak class="w-full">
-                    <div x-show="isStatsLoading" class="flex justify-center py-20">
-                        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
-                    </div>
-
-                    <div x-show="!isStatsLoading">
-                        
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                            
-                            <div class="lg:col-span-1 glass-panel p-6 sm:p-8 rounded-3xl flex flex-col items-center justify-center gap-3 relative overflow-hidden text-center border-t border-white/40 dark:border-white/5 shadow-lg">
-                                <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full shadow-xl overflow-hidden shrink-0 bg-slate-200 ring-4 ring-white dark:ring-[#0f0f0f] z-10">
-                                    <img :src="'/api/proxy/user_image/' + userId" class="w-full h-full object-cover" onerror="this.src='https://api.dicebear.com/9.x/notionists/png?seed=User'">
-                                </div>
-                                <div class="z-10 mt-1">
-                                    <h3 class="text-2xl font-black text-slate-900 dark:text-white" x-text="userName"></h3>
-                                    <p class="text-xs font-bold text-brand-600 dark:text-brand-400 mt-1.5 bg-brand-50 dark:bg-brand-500/10 px-3 py-1 rounded-full border border-brand-100 dark:border-brand-500/20 inline-block">入驻 Emby 第 <span x-text="userStats?.overview?.account_age_days || 1"></span> 天</p>
-                                </div>
-                                
-                                <div class="grid grid-cols-3 w-full gap-2 sm:gap-4 pt-5 mt-3 border-t border-slate-200 dark:border-white/10 z-10">
-                                    <div class="text-center">
-                                        <div class="text-xl sm:text-2xl font-black font-mono text-slate-800 dark:text-white" x-text="userStats?.overview?.total_plays || 0"></div>
-                                        <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">播放频次</div>
-                                    </div>
-                                    <div class="text-center border-l border-r border-slate-200 dark:border-white/10">
-                                        <div class="text-xl sm:text-2xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-brand-500 to-blue-500" x-text="Math.round((userStats?.overview?.total_duration || 0) / 3600)"></div>
-                                        <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">沉浸(小时)</div>
-                                    </div>
-                                    <div class="text-center">
-                                        <div class="text-xl sm:text-2xl font-black font-mono text-slate-800 dark:text-white" x-text="Math.round((userStats?.overview?.avg_duration || 0) / 60)"></div>
-                                        <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">均次(分钟)</div>
-                                    </div>
+                <div x-show="serverTop.length > 0" class="mb-10">
+                    <h3 class="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white px-1"><i class="fa-solid fa-fire text-rose-500"></i> 本站热播排行 Top 10</h3>
+                    <div x-data="dragScroll" @mousedown="start" @mouseleave="end" @mouseup="end" @mousemove="move" class="flex overflow-x-auto hide-scrollbar gap-4 pb-6 pt-2 -mx-4 px-4 cursor-grab active:cursor-grabbing select-none">
+                        <template x-for="(item, index) in serverTop" :key="item.ItemId">
+                            <div class="poster-card flex-none w-32 md:w-48 relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md" @click="if(!isDragging) { window.open(serverUrl + '/web/index.html#!/item?id=' + item.ItemId, '_blank'); }">
+                                <img :src="`/api/proxy/smart_image?item_id=${item.ItemId}&type=Primary`" class="w-full h-full object-cover pointer-events-none" loading="lazy">
+                                <div class="absolute top-0 left-0 bg-black/60 text-white text-xs font-black px-2 py-1 rounded-br-lg backdrop-blur-md z-10" :class="index < 3 ? 'text-yellow-400' : ''">TOP <span x-text="index + 1"></span></div>
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
+                                    <h4 class="font-bold text-white text-sm line-clamp-2 leading-tight" x-text="item.ItemName"></h4>
+                                    <div class="text-[10px] text-zinc-300 mt-1 font-mono">播放: <span x-text="item.PlayCount"></span> 次</div>
                                 </div>
                             </div>
-
-                            <div class="lg:col-span-2 flex flex-col gap-5">
-                                <div class="glass-panel p-5 rounded-3xl flex gap-4 sm:gap-6 items-center relative overflow-hidden border-t border-white/40 dark:border-white/5 flex-1" x-show="userStats?.top_fav">
-                                    <div class="absolute inset-0 bg-cover bg-center opacity-10 dark:opacity-20 blur-2xl" :style="`background-image: url(/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary)`"></div>
-                                    <img :src="`/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary`" class="w-24 h-36 rounded-xl shadow-lg object-cover relative z-10 ring-2 ring-white/50 dark:ring-white/10">
-                                    <div class="relative z-10 flex-1">
-                                        <div class="text-[11px] font-black text-rose-500 tracking-widest uppercase mb-1.5"><i class="fa-solid fa-heart mr-1 text-sm"></i> 执念最爱</div>
-                                        <h4 class="font-black text-xl text-slate-900 dark:text-white line-clamp-2 leading-tight mb-3" x-text="userStats?.top_fav?.ItemName"></h4>
-                                        <div class="flex gap-2">
-                                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-repeat text-brand-500 mr-1"></i>N刷 <span x-text="userStats?.top_fav?.c"></span> 次</span>
-                                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-clock text-blue-500 mr-1"></i>沉迷 <span x-text="Math.round((userStats?.top_fav?.d || 0) / 3600)"></span> 小时</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 flex flex-col flex-1">
-                                    <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-3"><i class="fa-solid fa-award text-yellow-500 mr-1.5 text-lg"></i> 观影成就</h4>
-                                    <div class="flex flex-wrap gap-2 items-start" x-show="userBadges.length > 0">
-                                        <template x-for="b in userBadges" :key="b.id">
-                                            <div @click="showToast(b.name + '：' + (b.desc || '已解锁该成就'))" class="cursor-pointer hover:scale-105 active:scale-95 transition-transform px-3 py-1.5 rounded-xl text-[11px] font-black shadow-sm dark:bg-opacity-20 border border-transparent flex items-center gap-1.5" :class="b.bg + ' ' + b.color">
-                                                <i :class="'fa-solid ' + b.icon"></i>
-                                                <span x-text="b.name"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div x-show="userBadges.length === 0" class="text-xs font-bold text-slate-400 py-4 flex-1 flex items-center justify-center bg-slate-100/50 dark:bg-white/5 rounded-xl">尚在探索中...</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="glass-panel p-5 rounded-3xl mt-5 border-t border-white/40 dark:border-white/5 w-full">
-                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-chart-line text-blue-500 mr-1.5 text-lg"></i> 近 30 天观影频率 (小时)</h4>
-                            <div class="relative h-48 sm:h-64 w-full"><canvas id="profileTrendChart"></canvas></div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
-                            <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 flex flex-col justify-center">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1.5 text-lg"></i> 偏好天平</h4>
-                                <div class="flex justify-between text-[11px] font-black mb-2">
-                                    <span class="text-blue-500 tracking-wider">电影 <span x-text="getMoviePct()"></span>%</span>
-                                    <span class="text-purple-500 tracking-wider"><span x-text="100 - getMoviePct()"></span>% 剧集</span>
-                                </div>
-                                <div class="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden flex border border-slate-300 dark:border-white/5 shadow-inner">
-                                    <div class="bg-gradient-to-r from-blue-400 to-blue-600 h-full transition-all duration-1000" :style="`width: ${getMoviePct()}%`"></div>
-                                    <div class="bg-gradient-to-r from-purple-400 to-purple-600 h-full transition-all duration-1000" :style="`width: ${100 - getMoviePct()}%`"></div>
-                                </div>
-                                <p class="text-[10px] text-center text-slate-500 dark:text-zinc-500 font-bold mt-4" x-text="getPrefText()"></p>
-                            </div>
-
-                            <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-1.5 text-lg"></i> 24H 生物钟</h4>
-                                <div class="relative h-32 w-full"><canvas id="profileHourChart"></canvas></div>
-                            </div>
-                            
-                            <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-desktop text-emerald-500 mr-1.5 text-lg"></i> 终端分布</h4>
-                                <div class="relative h-32 w-full"><canvas id="profileDeviceChart"></canvas></div>
-                            </div>
-                            
-                            <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 播放软件偏好</h4>
-                                <div class="relative h-32 w-full"><canvas id="profileClientChart"></canvas></div>
-                            </div>
-                        </div>
-
-                        <div class="glass-panel p-5 rounded-3xl mt-5 mb-10 border-t border-white/40 dark:border-white/5">
-                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-shoe-prints text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <template x-for="log in (userStats?.logs || []).slice(0, 14)" :key="log.DateCreated">
-                                    <div class="flex justify-between items-center bg-white/50 dark:bg-white/5 p-3 rounded-2xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-colors group">
-                                        <div class="min-w-0 flex-1">
-                                            <div class="font-bold text-sm text-slate-800 dark:text-zinc-200 truncate" x-text="log.ItemName"></div>
-                                            <div class="text-[10px] text-slate-500 mt-1 flex gap-2 items-center">
-                                                <span x-text="log.DateCreated.substring(5, 16).replace('T', ' ')"></span>
-                                                <span class="bg-slate-200 dark:bg-black/50 text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-bold" x-text="log.Device"></span>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-2 shrink-0 ml-3">
-                                            <div class="text-xs font-black text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded-lg border border-brand-100 dark:border-brand-500/20" x-text="Math.round(log.PlayDuration/60) + 'm'"></div>
-                                            <button @click="openFeedbackModal(log.ItemName, log.smart_poster)" class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white transition-colors flex items-center justify-center border border-rose-100 dark:border-rose-500/20 opacity-0 group-hover:opacity-100 sm:opacity-100" title="资源有问题？点此报错">
-                                                <i class="fa-solid fa-triangle-exclamation text-xs"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                            <div x-show="!userStats?.logs || userStats.logs.length === 0" class="text-xs font-bold text-slate-400 py-4 text-center bg-slate-100/50 dark:bg-white/5 rounded-xl">暂无播放记录</div>
-                        </div>
-
+                        </template>
                     </div>
                 </div>
 
             </div>
+
+            <div x-show="currentTab === 'request'" x-transition.opacity.duration.300ms x-cloak class="min-h-[500px]">
+                
+                <div class="text-center py-6 space-y-3 mb-8">
+                    <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight">星愿补给站</h2>
+                    <p class="text-slate-500 dark:text-zinc-400 text-sm">搜索全网影视库，点击一键求片</p>
+                </div>
+
+                <div class="max-w-2xl mx-auto relative group mb-12">
+                    <div class="absolute -inset-0.5 bg-gradient-to-r from-brand-400 to-blue-500 rounded-full blur opacity-20 group-hover:opacity-40 dark:opacity-30 transition duration-500"></div>
+                    <form @submit.prevent="searchMedia()" class="relative flex items-center bg-white/80 dark:bg-black/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-full p-2 shadow-sm focus-within:ring-2 focus-within:ring-brand-500/50 transition-all">
+                        <input type="text" x-model="searchQuery" placeholder="输入你想看的电影或剧集名..." class="w-full bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 px-6 py-3 outline-none text-lg">
+                        <button type="submit" class="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 p-3 rounded-full transition-transform active:scale-90 shadow-md">
+                            <svg x-show="!isSearching" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <svg x-show="isSearching" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </button>
+                    </form>
+                </div>
+
+                <div x-show="searchResults.length > 0" class="mb-10">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold flex items-center gap-2">🔍 搜索结果</h3>
+                        <button @click="searchResults = []; searchQuery = ''" class="text-sm font-bold text-slate-400 hover:text-brand-500 transition-colors bg-white/50 dark:bg-white/5 px-3 py-1 rounded-full">清除结果</button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                        <template x-for="item in searchResults" :key="item.tmdb_id">
+                            <div @click="openModal(item)" class="poster-card relative rounded-2xl overflow-hidden cursor-pointer bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md flex flex-col">
+                                <img :src="item.poster_path || 'https://via.placeholder.com/500x750?text=No+Poster'" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                                    <div class="text-xs font-bold px-2 py-1 bg-brand-500 rounded text-white self-start mb-2" x-text="item.media_type === 'movie' ? '电影' : '剧集'"></div>
+                                    <h4 class="font-bold text-white line-clamp-2" x-text="item.title"></h4>
+                                    <div class="flex items-center justify-between mt-1 text-sm text-zinc-300">
+                                        <span x-text="item.year"></span>
+                                        <span class="flex items-center gap-1 text-yellow-400 font-bold">★ <span x-text="item.vote_average"></span></span>
+                                    </div>
+                                </div>
+                                <div x-show="item.local_status === 1" class="absolute top-2 left-2 px-2 py-1 bg-green-500 text-white text-[10px] font-bold rounded shadow-md z-10">✅ 已在库</div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="searchResults.length === 0" class="text-center py-20 opacity-40">
+                    <i class="fa-solid fa-satellite-dish text-6xl mb-4"></i>
+                    <p class="font-bold tracking-widest">发射信号寻找片源</p>
+                </div>
+
+            </div>
+
+            <div x-show="currentTab === 'profile'" x-transition.opacity.duration.300ms x-cloak class="w-full">
+                <div x-show="isStatsLoading" class="flex justify-center py-20">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
+                </div>
+
+                <div x-show="!isStatsLoading">
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        <div class="lg:col-span-1 glass-panel p-6 sm:p-8 rounded-3xl flex flex-col items-center justify-center gap-3 relative overflow-hidden text-center border-t border-white/40 dark:border-white/5 shadow-lg">
+                            <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full shadow-xl overflow-hidden shrink-0 bg-slate-200 ring-4 ring-white dark:ring-[#0f0f0f] z-10 relative">
+                                <img :src="'/api/proxy/user_image/' + userId" class="w-full h-full object-cover" onerror="this.src='https://api.dicebear.com/9.x/notionists/png?seed=User'">
+                            </div>
+                            <div class="z-10 mt-1">
+                                <h3 class="text-2xl font-black text-slate-900 dark:text-white flex items-center justify-center gap-2">
+                                    <span x-text="userName"></span>
+                                    <i class="fa-solid fa-circle-check text-brand-500 text-sm" title="认证用户"></i>
+                                </h3>
+                                <div class="mt-2 space-y-1">
+                                    <div class="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded inline-block">入驻天数：<span x-text="userStats?.overview?.account_age_days || 1"></span> 天</div>
+                                    <div class="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded inline-block">账号有效期：<span x-text="expireDate" :class="expireDate === '永久有效' ? 'text-brand-500' : 'text-rose-500'"></span></div>
+                                </div>
+                            </div>
+                            
+                            <div class="w-full mt-2 z-10 bg-slate-50 dark:bg-[#111] p-3 rounded-xl border border-slate-200 dark:border-white/5 text-left relative group">
+                                <div class="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-1">🔗 服务器直连地址</div>
+                                <div class="text-xs font-mono text-slate-800 dark:text-zinc-300 truncate pr-6" x-text="serverUrl"></div>
+                                <button @click="copyToClipboard(serverUrl); showToast('地址已复制')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-500 transition-colors">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="w-full mt-2 grid grid-cols-2 gap-2 z-10">
+                                <button @click="openQueueModal('request')" class="py-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 text-xs font-bold transition flex flex-col items-center justify-center border border-blue-200 dark:border-blue-500/20">
+                                    <i class="fa-solid fa-list-check text-lg mb-1"></i>
+                                    我的求片
+                                </button>
+                                <button @click="openQueueModal('feedback')" class="py-2.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 text-xs font-bold transition flex flex-col items-center justify-center border border-rose-200 dark:border-rose-500/20">
+                                    <i class="fa-solid fa-triangle-exclamation text-lg mb-1"></i>
+                                    我的报错
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="lg:col-span-2 flex flex-col gap-5">
+                            <div class="glass-panel p-5 rounded-3xl flex gap-4 sm:gap-6 items-center relative overflow-hidden border-t border-white/40 dark:border-white/5 flex-1" x-show="userStats?.top_fav">
+                                <div class="absolute inset-0 bg-cover bg-center opacity-10 dark:opacity-20 blur-2xl" :style="`background-image: url(/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary)`"></div>
+                                <img :src="`/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary`" class="w-24 h-36 rounded-xl shadow-lg object-cover relative z-10 ring-2 ring-white/50 dark:ring-white/10">
+                                <div class="relative z-10 flex-1">
+                                    <div class="text-[11px] font-black text-rose-500 tracking-widest uppercase mb-1.5"><i class="fa-solid fa-heart mr-1 text-sm"></i> 执念最爱</div>
+                                    <h4 class="font-black text-xl text-slate-900 dark:text-white line-clamp-2 leading-tight mb-3" x-text="userStats?.top_fav?.ItemName"></h4>
+                                    <div class="flex gap-2">
+                                        <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-repeat text-brand-500 mr-1"></i>N刷 <span x-text="userStats?.top_fav?.c"></span> 次</span>
+                                        <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-clock text-blue-500 mr-1"></i>沉迷 <span x-text="Math.round((userStats?.top_fav?.d || 0) / 3600)"></span> 小时</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 flex flex-col flex-1">
+                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-3"><i class="fa-solid fa-award text-yellow-500 mr-1.5 text-lg"></i> 观影成就</h4>
+                                <div class="flex flex-wrap gap-2 items-start" x-show="userBadges.length > 0">
+                                    <template x-for="b in userBadges" :key="b.id">
+                                        <div @click="showToast(b.name + '：' + (b.desc || '已解锁该成就'))" class="cursor-pointer hover:scale-105 active:scale-95 transition-transform px-3 py-1.5 rounded-xl text-[11px] font-black shadow-sm dark:bg-opacity-20 border border-transparent flex items-center gap-1.5" :class="b.bg + ' ' + b.color">
+                                            <i :class="'fa-solid ' + b.icon"></i>
+                                            <span x-text="b.name"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="userBadges.length === 0" class="text-xs font-bold text-slate-400 py-4 flex-1 flex items-center justify-center bg-slate-100/50 dark:bg-white/5 rounded-xl">尚在探索中...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3 sm:gap-5 mt-5">
+                        <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
+                            <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="userStats?.overview?.total_plays || 0"></div>
+                            <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">总播放次数</div>
+                        </div>
+                        <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
+                            <div class="text-2xl sm:text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-brand-500 to-blue-500" x-text="Math.round((userStats?.overview?.total_duration || 0) / 3600)"></div>
+                            <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">总沉浸小时</div>
+                        </div>
+                        <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
+                            <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="Math.round((userStats?.overview?.avg_duration || 0) / 60)"></div>
+                            <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">均次分钟</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-3xl mt-5 border-t border-white/40 dark:border-white/5 w-full shadow-sm">
+                        <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-chart-line text-blue-500 mr-1.5 text-lg"></i> 近 30 天观影频率 (小时)</h4>
+                        <div class="relative h-48 sm:h-64 w-full"><canvas id="profileTrendChart"></canvas></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
+                        <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 flex flex-col justify-center shadow-sm">
+                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1.5 text-lg"></i> 偏好天平</h4>
+                            <div class="flex justify-between text-[11px] font-black mb-2">
+                                <span class="text-blue-500 tracking-wider">电影 <span x-text="getMoviePct()"></span>%</span>
+                                <span class="text-purple-500 tracking-wider"><span x-text="100 - getMoviePct()"></span>% 剧集</span>
+                            </div>
+                            <div class="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden flex border border-slate-300 dark:border-white/5 shadow-inner">
+                                <div class="bg-gradient-to-r from-blue-400 to-blue-600 h-full transition-all duration-1000" :style="`width: ${getMoviePct()}%`"></div>
+                                <div class="bg-gradient-to-r from-purple-400 to-purple-600 h-full transition-all duration-1000" :style="`width: ${100 - getMoviePct()}%`"></div>
+                            </div>
+                            <p class="text-[10px] text-center text-slate-500 dark:text-zinc-500 font-bold mt-4" x-text="getPrefText()"></p>
+                        </div>
+
+                        <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 shadow-sm">
+                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-1.5 text-lg"></i> 24H 生物钟</h4>
+                            <div class="relative h-32 w-full"><canvas id="profileHourChart"></canvas></div>
+                        </div>
+                        
+                        <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 shadow-sm">
+                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-desktop text-emerald-500 mr-1.5 text-lg"></i> 终端分布</h4>
+                            <div class="relative h-32 w-full"><canvas id="profileDeviceChart"></canvas></div>
+                        </div>
+                        
+                        <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 shadow-sm">
+                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 播放软件偏好</h4>
+                            <div class="relative h-32 w-full"><canvas id="profileClientChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-3xl mt-5 mb-10 border-t border-white/40 dark:border-white/5 shadow-sm">
+                        <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-shoe-prints text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <template x-for="log in (userStats?.logs || []).slice(0, 14)" :key="log.DateCreated">
+                                <div class="flex justify-between items-center bg-white/50 dark:bg-white/5 p-3 rounded-2xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-colors group">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-bold text-sm text-slate-800 dark:text-zinc-200 truncate" x-text="log.ItemName"></div>
+                                        <div class="text-[10px] text-slate-500 mt-1 flex gap-2 items-center">
+                                            <span x-text="log.DateCreated.substring(5, 16).replace('T', ' ')"></span>
+                                            <span class="bg-slate-200 dark:bg-black/50 text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-bold" x-text="log.Device"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0 ml-3">
+                                        <div class="text-xs font-black text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded-lg border border-brand-100 dark:border-brand-500/20" x-text="Math.round(log.PlayDuration/60) + 'm'"></div>
+                                        <button @click="openFeedbackModal(log.ItemName, log.smart_poster)" class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white transition-colors flex items-center justify-center border border-rose-100 dark:border-rose-500/20 opacity-0 group-hover:opacity-100 sm:opacity-100" title="资源有问题？点此报错">
+                                            <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="!userStats?.logs || userStats.logs.length === 0" class="text-xs font-bold text-slate-400 py-4 text-center bg-slate-100/50 dark:bg-white/5 rounded-xl">暂无播放记录</div>
+                    </div>
+
+                </div>
+            </div>
+
         </main>
 
         <div class="fixed bottom-6 w-[90%] left-[5%] z-50 sm:hidden transition-transform duration-300 ease-in-out" :class="isScrollingDown ? 'translate-y-32 pointer-events-none' : 'translate-y-0'">
             <div class="glass-panel rounded-full shadow-[0_15px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_15px_40px_rgba(0,0,0,0.8)] border border-slate-200/80 dark:border-white/5 backdrop-blur-2xl px-2 py-2 flex justify-around items-center">
                 <button @click="switchTab('explore');" class="flex flex-col items-center justify-center w-full space-y-1 transition-all relative" :class="currentTab === 'explore' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-zinc-500'">
                     <div class="absolute inset-0 bg-brand-50 dark:bg-brand-500/20 rounded-full scale-0 transition-transform duration-300" :class="currentTab === 'explore' ? 'scale-100' : ''"></div>
-                    <i class="fa-solid fa-film text-lg relative z-10"></i>
-                    <span class="text-[10px] font-bold relative z-10">大厅</span>
+                    <i class="fa-solid fa-house text-lg relative z-10"></i>
+                    <span class="text-[10px] font-bold relative z-10">主页</span>
                 </button>
-                <button @click="switchTab('queue');" class="flex flex-col items-center justify-center w-full space-y-1 transition-all relative" :class="currentTab === 'queue' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-zinc-500'">
-                    <div class="absolute inset-0 bg-brand-50 dark:bg-brand-500/20 rounded-full scale-0 transition-transform duration-300" :class="currentTab === 'queue' ? 'scale-100' : ''"></div>
-                    <i class="fa-solid fa-list-check text-lg relative z-10"></i>
-                    <span class="text-[10px] font-bold relative z-10">进度</span>
+                <button @click="switchTab('request');" class="flex flex-col items-center justify-center w-full space-y-1 transition-all relative" :class="currentTab === 'request' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-zinc-500'">
+                    <div class="absolute inset-0 bg-brand-50 dark:bg-brand-500/20 rounded-full scale-0 transition-transform duration-300" :class="currentTab === 'request' ? 'scale-100' : ''"></div>
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg relative z-10"></i>
+                    <span class="text-[10px] font-bold relative z-10">心愿单</span>
                 </button>
                 <button @click="switchTab('profile');" class="flex flex-col items-center justify-center w-full space-y-1 transition-all relative" :class="currentTab === 'profile' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-zinc-500'">
                     <div class="absolute inset-0 bg-brand-50 dark:bg-brand-500/20 rounded-full scale-0 transition-transform duration-300" :class="currentTab === 'profile' ? 'scale-100' : ''"></div>
@@ -464,13 +407,13 @@
         <div class="hidden sm:flex fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-transform duration-300 hover:-translate-y-1">
             <div class="glass-panel p-1.5 rounded-full inline-flex relative w-[420px] bg-white/90 dark:bg-[#0a0a0a]/90 shadow-[0_15px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_15px_50px_rgba(0,0,0,0.8)] border border-slate-200/80 dark:border-white/5 backdrop-blur-2xl">
                 <div class="absolute inset-y-1.5 left-1.5 w-[calc(33.33%-4px)] bg-slate-100 dark:bg-[#1f1f1f] rounded-full transition-transform duration-300 ease-out shadow-sm border border-slate-200/50 dark:border-white/5" 
-                     :class="currentTab === 'explore' ? 'translate-x-0' : (currentTab === 'queue' ? 'translate-x-full' : 'translate-x-[200%]')"></div>
+                     :class="currentTab === 'explore' ? 'translate-x-0' : (currentTab === 'request' ? 'translate-x-full' : 'translate-x-[200%]')"></div>
                 
                 <button @click="switchTab('explore');" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'explore' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-300 dark:hover:text-white'">
-                    <i class="fa-solid fa-film text-lg"></i> 找片大厅
+                    <i class="fa-solid fa-house text-lg"></i> 发现大厅
                 </button>
-                <button @click="switchTab('queue');" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'queue' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-300 dark:hover:text-white'">
-                    <i class="fa-solid fa-list-check text-lg"></i> 进度与反馈
+                <button @click="switchTab('request');" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'request' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-300 dark:hover:text-white'">
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg"></i> 心愿工坊
                 </button>
                 <button @click="switchTab('profile');" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'profile' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-300 dark:hover:text-white'">
                     <i class="fa-solid fa-user-astronaut text-lg"></i> 我的画像
@@ -581,7 +524,78 @@
         </div>
     </div>
 
-    <div x-show="toast.show" x-transition x-cloak class="fixed top-20 left-1/2 -translate-x-1/2 z-[110] px-6 py-3 rounded-full shadow-xl border backdrop-blur-xl flex items-center gap-2 font-bold bg-white/90 dark:bg-[#111]/90 dark:border-white/10"
+    <div x-show="queueModal.open" class="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" x-cloak>
+        <div x-show="queueModal.open" x-transition.opacity @click="closeQueueModal()" class="absolute inset-0 bg-slate-900/60 dark:bg-black/90 backdrop-blur-sm"></div>
+        <div x-show="queueModal.open" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-full md:translate-y-10 scale-95" x-transition:enter-end="opacity-100 translate-y-0 scale-100" class="relative w-full md:w-[700px] h-[85vh] md:h-[800px] bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col">
+            
+            <div class="p-4 sm:p-6 border-b border-slate-200 dark:border-white/5 flex justify-between items-center glass-header z-10 shrink-0">
+                <div class="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+                    <button @click="queueModal.activeTab = 'request'; loadQueue()" class="px-4 py-1.5 rounded-lg text-sm font-bold transition-all" :class="queueModal.activeTab === 'request' ? 'bg-white dark:bg-[#1a1a1a] text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400'">我的求片</button>
+                    <button @click="queueModal.activeTab = 'feedback'; loadMyFeedback()" class="px-4 py-1.5 rounded-lg text-sm font-bold transition-all" :class="queueModal.activeTab === 'feedback' ? 'bg-white dark:bg-[#1a1a1a] text-rose-600 dark:text-rose-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400'">我的报错</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="queueModal.activeTab === 'request' ? loadQueue() : loadMyFeedback(); isSpinning = true; setTimeout(() => isSpinning = false, 800); showToast('已刷新')" x-data="{ isSpinning: false }" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-brand-500 flex items-center justify-center transition">
+                        <svg :class="{'animate-spin': isSpinning}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </button>
+                    <button @click="closeQueueModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 sm:p-6 hide-scrollbar bg-slate-50/50 dark:bg-transparent">
+                <div x-show="queueModal.activeTab === 'request'">
+                    <div x-show="myQueue.length === 0" class="text-center py-20 text-slate-400 dark:text-zinc-600">
+                        <i class="fa-solid fa-box-open text-5xl mb-4 opacity-30"></i>
+                        <p class="font-bold text-sm">暂无求片记录</p>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <template x-for="item in myQueue" :key="item.tmdb_id + '_' + item.season">
+                            <div class="bg-white dark:bg-[#111] p-3 rounded-2xl flex gap-4 items-center relative border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md transition">
+                                <img :src="item.poster_path" class="w-16 sm:w-20 rounded-xl shadow-sm aspect-[2/3] object-cover bg-slate-200 dark:bg-[#1a1a1a]">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-base sm:text-lg truncate text-slate-900 dark:text-white" x-text="item.title"></h4>
+                                    <div class="text-xs font-medium text-slate-500 dark:text-zinc-400 mt-1 mb-2.5" x-text="item.media_type === 'tv' ? `${item.year} · 第 ${item.season} 季` : item.year"></div>
+                                    
+                                    <span x-show="item.status === 0" class="px-2 py-1 bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-zinc-300 rounded border border-slate-200 dark:border-white/10 text-[10px] font-bold">审核中</span>
+                                    <span x-show="item.status === 1 || item.status === 4" class="px-2 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded border border-blue-200 dark:border-blue-500/20 text-[10px] font-bold inline-flex items-center gap-1.5"><span class="animate-pulse w-1.5 h-1.5 bg-blue-500 rounded-full"></span> 处理中</span>
+                                    <span x-show="item.status === 2" class="px-2 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 rounded border border-green-200 dark:border-green-500/20 text-[10px] font-bold">✅ 已入库</span>
+                                    
+                                    <div x-show="item.status === 3" class="mt-1">
+                                        <span class="px-2 py-1 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded border border-red-200 dark:border-red-500/20 text-[10px] font-bold">❌ 被拒绝</span>
+                                        <div class="text-[10px] text-red-500/80 mt-1 pl-1" x-show="item.reject_reason">原因: <span x-text="item.reject_reason"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="queueModal.activeTab === 'feedback'" x-cloak>
+                    <div x-show="myFeedbacks.length === 0" class="text-center py-20 text-slate-400 dark:text-zinc-600">
+                        <i class="fa-solid fa-check-double text-5xl mb-4 opacity-30"></i>
+                        <p class="font-bold text-sm">没有任何报错记录</p>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <template x-for="feed in myFeedbacks" :key="feed.id">
+                            <div class="bg-white dark:bg-[#111] p-4 rounded-2xl flex flex-col gap-2 border-l-4 shadow-sm border border-slate-200 dark:border-white/5" :class="feed.status === 0 ? 'border-l-red-400' : (feed.status === 1 ? 'border-l-blue-400' : (feed.status === 2 ? 'border-l-green-400' : 'border-l-gray-500'))">
+                                <div class="flex justify-between items-start">
+                                    <h4 class="font-bold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-1 pr-2" x-text="feed.item_name"></h4>
+                                    <span x-show="feed.status === 0" class="text-[10px] bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-zinc-300 px-2 py-1 rounded font-bold shrink-0">待核实</span>
+                                    <span x-show="feed.status === 1" class="text-[10px] bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-1 rounded font-bold shrink-0">🛠️ 修复中</span>
+                                    <span x-show="feed.status === 2" class="text-[10px] bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 px-2 py-1 rounded font-bold shrink-0">✅ 已解决</span>
+                                    <span x-show="feed.status === 3" class="text-[10px] bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2 py-1 rounded font-bold shrink-0">❌ 忽略</span>
+                                </div>
+                                <div class="text-[11px] text-rose-500 font-bold bg-rose-50 dark:bg-rose-500/10 self-start px-1.5 py-0.5 rounded border border-rose-100 dark:border-rose-500/20" x-text="'标签：' + feed.issue_type"></div>
+                                <p class="text-xs text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-white/5 p-2 rounded-lg mt-1" x-show="feed.description" x-text="feed.description"></p>
+                                <p class="text-[9px] text-slate-400 font-mono mt-1" x-text="feed.created_at"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="toast.show" x-transition x-cloak class="fixed top-20 left-1/2 -translate-x-1/2 z-[120] px-6 py-3 rounded-full shadow-xl border backdrop-blur-xl flex items-center gap-2 font-bold bg-white/95 dark:bg-[#111]/95 dark:border-white/10"
          :class="toast.type === 'success' ? 'border-green-300 text-green-600 dark:text-green-400' : 'border-red-300 text-red-600 dark:text-red-400'">
         <span x-text="toast.message"></span>
     </div>
@@ -612,10 +626,19 @@
                 isScrollingDown: false, 
                 
                 isLoaded: false, isLoggedIn: false, isDarkMode: false,
-                userId: '', userName: '', 
+                userId: '', userName: '', expireDate: '未知', serverUrl: '',
                 loginForm: { username: '', password: '' }, isLoggingIn: false,
-                searchQuery: '', isSearching: false, currentTab: 'explore', queueTab: 'request',
-                searchResults: [], trendingMovies: [], trendingTv: [], topMovies: [], topTv: [], 
+                
+                searchQuery: '', isSearching: false, currentTab: 'explore', 
+                searchResults: [], 
+                
+                // 大盘相关数据
+                serverDashboard: null,
+                serverLatest: [],
+                serverTop: [],
+                
+                // 工单浮窗
+                queueModal: { open: false, activeTab: 'request' },
                 myQueue: [], myFeedbacks: [],
                 
                 userStats: null, userBadges: [], userTrend: null, isStatsLoading: false, statsLoaded: false,
@@ -645,11 +668,12 @@
                             this.isLoggedIn = true; 
                             this.userId = data.user.Id;
                             this.userName = data.user.Name;
-                            this.loadTrending(); 
+                            this.expireDate = data.user.expire_date;
+                            this.serverUrl = data.server_url;
+                            this.loadServerData(); // 加载大盘数据
                         }
                     } catch(e) {}
                     this.isLoaded = true;
-                    setInterval(() => { if (this.isLoggedIn && this.currentTab === 'queue') { this.loadQueue(); this.loadMyFeedback(); } }, 10000);
                 },
 
                 toggleTheme() {
@@ -667,6 +691,19 @@
                     this.toast = { show: true, message: msg, type };
                     setTimeout(() => this.toast.show = false, 3000);
                 },
+                
+                async copyToClipboard(text) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                    } catch(e) {
+                        const input = document.createElement('input');
+                        input.value = text;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                    }
+                },
 
                 async login() {
                     if(!this.loginForm.username || !this.loginForm.password) return;
@@ -677,8 +714,15 @@
                         if (data.status === 'success') {
                             const checkRes = await fetch('/api/requests/check');
                             const checkData = await checkRes.json();
-                            if (checkData.status === 'success') { this.userId = checkData.user.Id; this.userName = checkData.user.Name; }
-                            this.isLoggedIn = true; this.loadTrending(); this.showToast('登录成功');
+                            if (checkData.status === 'success') { 
+                                this.userId = checkData.user.Id; 
+                                this.userName = checkData.user.Name; 
+                                this.expireDate = checkData.user.expire_date;
+                                this.serverUrl = checkData.server_url;
+                            }
+                            this.isLoggedIn = true; 
+                            this.loadServerData();
+                            this.showToast('登录成功');
                         } else { this.showToast(data.message, 'error'); }
                     } catch(e) { this.showToast('网络错误', 'error'); }
                     this.isLoggingIn = false;
@@ -691,11 +735,43 @@
                 switchTab(tab) {
                     this.currentTab = tab;
                     this.$nextTick(() => { window.scrollTo(0, 0); });
-                    if (tab === 'queue') { this.loadQueue(); this.loadMyFeedback(); }
                     if (tab === 'profile') {
                         if (!this.statsLoaded) this.loadProfileStats();
                         else setTimeout(() => this.renderCharts(), 150);
                     }
+                },
+
+                // 加载首页服务器大盘数据
+                async loadServerData() {
+                    try {
+                        // 拉取大屏统计
+                        const resDash = await fetch('/api/stats/dashboard?user_id=all');
+                        const dataDash = await resDash.json();
+                        if (dataDash.status === 'success') this.serverDashboard = dataDash.data;
+                        
+                        // 拉取最新入库
+                        const resLat = await fetch('/api/stats/latest?limit=15');
+                        const dataLat = await resLat.json();
+                        if (dataLat.status === 'success') this.serverLatest = dataLat.data;
+                        
+                        // 拉取全站排行榜
+                        const resTop = await fetch('/api/stats/top_movies?category=all&sort_by=count');
+                        const dataTop = await resTop.json();
+                        if (dataTop.status === 'success') this.serverTop = dataTop.data.slice(0, 10); // 取前十
+                    } catch(e) {}
+                },
+
+                // 打开工单抽屉
+                openQueueModal(tab) {
+                    this.queueModal.activeTab = tab;
+                    this.queueModal.open = true;
+                    document.body.style.overflow = 'hidden';
+                    if(tab === 'request') this.loadQueue();
+                    else this.loadMyFeedback();
+                },
+                closeQueueModal() {
+                    this.queueModal.open = false;
+                    document.body.style.overflow = '';
                 },
 
                 renderCharts() {
@@ -780,35 +856,12 @@
                     return "「雨露均沾，电影与剧集我全都要」";
                 },
 
-                async loadTrending() {
-                    const cacheKey = 'ep_trending_cache_v3';
-                    const cached = localStorage.getItem(cacheKey);
-                    if (cached) {
-                        const parsed = JSON.parse(cached);
-                        if (Date.now() - parsed.ts < 3600000) { 
-                            this.trendingMovies = parsed.data.movies || [];
-                            this.trendingTv = parsed.data.tv || [];
-                            this.topMovies = parsed.data.top_movies || [];
-                            this.topTv = parsed.data.top_tv || [];
-                            return;
-                        }
-                    }
-                    try {
-                        const res = await fetch('/api/requests/trending');
-                        const data = await res.json();
-                        if(data.status === 'success') {
-                            this.trendingMovies = data.data.movies || []; 
-                            this.trendingTv = data.data.tv || [];
-                            this.topMovies = data.data.top_movies || []; 
-                            this.topTv = data.data.top_tv || [];
-                            localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: data.data }));
-                        }
-                    } catch (e) {}
-                },
-
                 async searchMedia() {
                     if (!this.searchQuery.trim()) return;
-                    this.isSearching = true; this.currentTab = 'explore'; window.scrollTo(0, 0);
+                    this.isSearching = true; 
+                    // 只有不在请求页面时才跳转
+                    if (this.currentTab !== 'request') this.currentTab = 'request'; 
+                    window.scrollTo(0, 0);
                     try {
                         const res = await fetch(`/api/requests/search?query=${encodeURIComponent(this.searchQuery)}`);
                         const data = await res.json();
@@ -861,7 +914,11 @@
                     try {
                         const res = await fetch('/api/requests/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                         const data = await res.json();
-                        if (data.status === 'success') { this.showToast('✅ ' + data.message); this.closeModal(); this.loadQueue(); setTimeout(() => this.switchTab('queue'), 500); } 
+                        if (data.status === 'success') { 
+                            this.showToast('✅ ' + data.message); 
+                            this.closeModal(); 
+                            this.openQueueModal('request'); // 提交成功后直接打开浮窗看进度
+                        } 
                         else { this.showToast('❌ ' + data.message, 'error'); }
                     } catch (e) { this.showToast('提交失败，请重试', 'error'); } finally { this.isSubmitting = false; }
                 },
@@ -886,7 +943,7 @@
                         if (data.status === 'success') {
                             this.showToast(data.message);
                             this.feedbackModal.open = false;
-                            this.loadMyFeedback();
+                            this.openQueueModal('feedback'); // 提交成功后打开浮窗
                         } else { this.showToast(data.message, 'error'); }
                     } catch(e) { this.showToast('报错失败，请重试', 'error'); }
                     finally { this.isFeedbackSubmitting = false; }

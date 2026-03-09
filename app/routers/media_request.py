@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from app.core.config import cfg, REPORT_COVER_URL
-from app.core.database import DB_PATH
+from app.core.database import DB_PATH, query_db
 from app.schemas.models import MediaRequestSubmitModel as BaseSubmitModel
 from app.services.bot_service import bot
 
@@ -62,7 +62,6 @@ def ensure_db_schema():
         )
     """)
     
-    # 防止遗漏
     c.execute("PRAGMA table_info(media_feedback)")
     feed_cols = [col[1] for col in c.fetchall()]
     if 'poster_path' not in feed_cols:
@@ -161,37 +160,29 @@ def request_system_login(data: RequestLoginModel, request: Request):
 @router.get("/api/requests/check")
 def check_auth(request: Request):
     user = request.session.get("req_user")
-    if user: return {"status": "success", "user": user}
+    if user: 
+        # 🔥 新增：自动附带该用户的过期时间和服务器公网地址，提供给前端展示
+        user_id = user.get("Id")
+        expire_date = "永久有效"
+        if user_id:
+            try:
+                row = query_db("SELECT expire_date FROM users_meta WHERE user_id = ?", (user_id,))
+                if row and row[0]['expire_date']:
+                    expire_date = row[0]['expire_date']
+            except: pass
+            
+        emby_url = cfg.get("emby_public_url") or cfg.get("emby_external_url") or cfg.get("emby_host") or ""
+        return {
+            "status": "success", 
+            "user": {**user, "expire_date": expire_date},
+            "server_url": emby_url.rstrip('/')
+        }
     return {"status": "error"}
 
 @router.post("/api/requests/logout")
 def request_system_logout(request: Request):
     request.session.pop("req_user", None)
     return {"status": "success"}
-
-_trending_cache = {}; _trending_cache_time = 0
-
-@router.get("/api/requests/trending")
-def get_trending():
-    global _trending_cache, _trending_cache_time
-    if time.time() - _trending_cache_time < 3600 and _trending_cache: return {"status": "success", "data": _trending_cache}
-    tmdb_key = cfg.get("tmdb_api_key"); proxy = cfg.get("proxy_url"); proxies = {"https": proxy} if proxy else None
-    try:
-        m_res = requests.get(f"https://api.themoviedb.org/3/trending/movie/week?api_key={tmdb_key}&language=zh-CN", proxies=proxies, timeout=10).json()
-        t_res = requests.get(f"https://api.themoviedb.org/3/trending/tv/week?api_key={tmdb_key}&language=zh-CN", proxies=proxies, timeout=10).json()
-        top_m_res = requests.get(f"https://api.themoviedb.org/3/movie/top_rated?api_key={tmdb_key}&language=zh-CN&region=CN&page=1", proxies=proxies, timeout=10).json()
-        top_t_res = requests.get(f"https://api.themoviedb.org/3/tv/top_rated?api_key={tmdb_key}&language=zh-CN&page=1", proxies=proxies, timeout=10).json()
-        def fmt(items, t): 
-            results = []
-            for i in items[:15]:
-                results.append({"tmdb_id": i['id'], "media_type": t, "title": i.get('title') or i.get('name'), "year": (i.get('release_date') or i.get('first_air_date') or "")[:4], "poster_path": f"https://image.tmdb.org/t/p/w500{i['poster_path']}" if i.get('poster_path') else "", "backdrop_path": f"https://image.tmdb.org/t/p/w1280{i['backdrop_path']}" if i.get('backdrop_path') else "", "overview": i.get('overview', ''), "vote_average": round(i.get('vote_average', 0), 1)})
-            return results
-        data = {"movies": fmt(m_res.get('results', []), 'movie'), "tv": fmt(t_res.get('results', []), 'tv'), "top_movies": fmt(top_m_res.get('results', []), 'movie'), "top_tv": fmt(top_t_res.get('results', []), 'tv')}
-        _trending_cache = data; _trending_cache_time = time.time()
-        return {"status": "success", "data": data}
-    except Exception as e: 
-        if _trending_cache: return {"status": "success", "data": _trending_cache}
-        return {"status": "error", "message": str(e)}
 
 @router.get("/api/requests/search")
 def search_tmdb(query: str, request: Request):
@@ -359,7 +350,6 @@ def get_pending_notify(request: Request):
         c.execute("SELECT COUNT(*) as cnt FROM media_feedback WHERE status = 0")
         feed_count = (c.fetchone() or {'cnt': 0})['cnt']
         
-        # 🔥 终极海报匹配 SQL：利用模糊查询，截取“权力的游戏 S01E01”里的主剧名去反查
         c.execute("""
             SELECT f.id, f.item_name, f.username, f.issue_type, f.created_at,
                    COALESCE(
@@ -406,14 +396,11 @@ def submit_feedback(data: FeedbackSubmitModel, request: Request):
     if not user: return {"status": "error", "message": "请重新登录"}
     uid = str(user.get("Id", "")); uname = user.get("Name") or "未知用户"
     
-    # 🔥 修复相对路径海报在 Telegram 无法下载的 Bug
-    # 如果传来的是 /api/proxy 这种相对路径，强制拼上当前服务器的完整公网 URL
     actual_poster = data.poster_path
     if actual_poster and actual_poster.startswith("/"):
         base_url = cfg.get("pulse_url") or str(request.base_url).rstrip('/')
         actual_poster = f"{base_url}{actual_poster}"
         
-    # 如果没传海报，智能从求片库里反查
     if not actual_poster or 'undefined' in actual_poster:
         conn = sqlite3.connect(DB_PATH); c = conn.cursor()
         c.execute("SELECT poster_path FROM media_requests WHERE ? LIKE title || '%' LIMIT 1", (data.item_name,))
@@ -444,7 +431,6 @@ def submit_feedback(data: FeedbackSubmitModel, request: Request):
     ]}
     
     img_url = actual_poster or REPORT_COVER_URL
-    # 发送图文消息给 TG / 企微
     bot.send_photo("sys_notify", img_url, msg, reply_markup=keyboard, platform="all")
     
     return {"status": "success", "message": "反馈已提交，感谢您的协助！"}

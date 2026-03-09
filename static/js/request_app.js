@@ -36,11 +36,22 @@ document.addEventListener('alpine:init', () => {
         },
 
         async loadRecommendations() {
-            const keywords = ['漫威', '星际穿越', '流浪地球', '哈利波特', '宫崎骏', '诺兰', '繁花', '三体', '黑客帝国', '蝙蝠侠'];
-            const kw = keywords[Math.floor(Math.random() * keywords.length)];
-            try { const res = await fetch(`/api/requests/search?query=${encodeURIComponent(kw)}`); const data = await res.json(); if(data.status === 'success' && data.data) { this.recommendResults = data.data.sort(() => 0.5 - Math.random()).slice(0, 10); } } catch(e) {}
+            try { 
+                const res = await fetch(`/api/requests/trending`); 
+                const data = await res.json(); 
+                if(data.status === 'success' && data.data && data.data.length > 0) { 
+                    // 打乱顺序，让每次进来的海报墙都不一样
+                    let validItems = data.data.sort(() => 0.5 - Math.random());
+                    this.recommendResults = validItems;
+                    
+                    // 将 40 部海报平均切分成 3 份，喂给 3 条跑马灯轨道
+                    const third = Math.ceil(validItems.length / 3);
+                    this.recommendRow1 = validItems.slice(0, third);
+                    this.recommendRow2 = validItems.slice(third, third * 2);
+                    this.recommendRow3 = validItems.slice(third * 2);
+                } 
+            } catch(e) { console.log("获取趋势海报失败"); }
         },
-
         switchTab(tab) { this.currentTab = tab; this.$nextTick(() => window.scrollTo(0, 0)); if (tab === 'profile') { if (!this.statsLoaded) this.loadProfileStats(); else setTimeout(() => this.renderCharts(), 150); } },
 
         async openShowcaseModal(itemId, fallbackItem = null) { const finalId = itemId || (fallbackItem ? fallbackItem.ItemId || fallbackItem.Id : ''); this.showcaseModal.data = fallbackItem || { Name: '加载中...' }; this.showcaseModal.open = true; this.showcaseModal.isLoading = true; document.body.style.overflow = 'hidden'; try { const res = await fetch(`/api/requests/item_info?item_id=${finalId}`); if(res.ok) { const data = await res.json(); if (data.status === 'success') this.showcaseModal.data = data.data; } } catch(e) {} finally { this.showcaseModal.isLoading = false; } },

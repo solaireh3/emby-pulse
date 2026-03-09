@@ -258,7 +258,33 @@ def search_tmdb(query: str, request: Request):
                 results.append({"tmdb_id": i['id'], "media_type": i['media_type'], "title": i.get('title') or i.get('name'), "year": (i.get('release_date') or i.get('first_air_date') or "")[:4], "poster_path": f"https://image.tmdb.org/t/p/w500{i['poster_path']}" if i.get('poster_path') else "", "overview": i.get('overview', ''), "vote_average": round(i.get('vote_average', 0), 1), "local_status": -1})
         return {"status": "success", "data": results}
     except Exception as e: return {"status": "error", "message": str(e)}
-
+# 🔥 新增：Apple TV+ 风格动态海报墙的专属数据源
+@router.get("/api/requests/trending")
+def get_tmdb_trending(request: Request):
+    if not request.session.get("req_user"): return {"status": "error", "message": "未登录"}
+    tmdb_key = cfg.get("tmdb_api_key")
+    proxy = cfg.get("proxy_url"); proxies = {"https": proxy} if proxy else None
+    try:
+        results = []
+        # 连抓 2 页，拿到 40 部最新热门大片铺满屏幕
+        for page in [1, 2]:
+            res = requests.get(f"https://api.themoviedb.org/3/trending/all/week?api_key={tmdb_key}&language=zh-CN&page={page}", proxies=proxies, timeout=10).json()
+            for i in res.get("results", []):
+                # 只保留有海报的电影和剧集
+                if i.get("media_type") in ["movie", "tv"] and i.get("poster_path"):
+                    results.append({
+                        "tmdb_id": i['id'], 
+                        "media_type": i['media_type'], 
+                        "title": i.get('title') or i.get('name'), 
+                        "year": (i.get('release_date') or i.get('first_air_date') or "")[:4], 
+                        "poster_path": f"https://image.tmdb.org/t/p/w500{i['poster_path']}", 
+                        "overview": i.get('overview', ''), 
+                        "vote_average": round(i.get('vote_average', 0), 1), 
+                        "local_status": -1
+                    })
+        return {"status": "success", "data": results}
+    except Exception as e: 
+        return {"status": "error", "message": str(e)}
 @router.get("/api/requests/tv/{tmdb_id}")
 def get_tv_details(tmdb_id: int):
     tmdb_key = cfg.get("tmdb_api_key"); proxy = cfg.get("proxy_url"); proxies = {"https": proxy} if proxy else None

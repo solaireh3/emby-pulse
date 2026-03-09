@@ -14,41 +14,32 @@
         </form>
     </div>
 
-    <div x-show="searchResults.length > 0" class="mb-10">
-        <div class="flex items-center justify-between mb-6">
-            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white"><i class="fa-solid fa-magnifying-glass text-brand-500"></i> 搜索结果</h3>
-            <button @click="searchResults = []; searchQuery = ''" class="text-sm font-bold text-slate-400 hover:text-brand-500 transition-colors bg-white/50 dark:bg-white/5 px-3 py-1 rounded-full border border-slate-200 dark:border-white/5">清除结果</button>
+    <div x-show="searchResults.length === 0 && !isSearching && recommendResults.length > 0" class="mt-4 pb-20 transition-opacity relative z-0" x-cloak>
+        <div class="text-center mb-6">
+            <h3 class="text-[11px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-[0.4em]">
+                Trending Now 全球热播趋势
+            </h3>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-            <template x-for="item in searchResults" :key="item.tmdb_id">
-                <div @click="openModal(item)" class="poster-card relative rounded-2xl overflow-hidden cursor-pointer bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-md flex flex-col">
-                    <img :src="item.poster_path || '/static/img/logo-app-2.png'" class="w-full h-full object-cover" :class="item.poster_path ? '' : 'p-6 opacity-30 object-contain'">
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 pointer-events-none">
-                        <div class="text-xs font-bold px-2 py-1 bg-brand-500 rounded text-white self-start mb-2" x-text="item.media_type === 'movie' ? '电影' : '剧集'"></div>
-                        <h4 class="font-bold text-white line-clamp-2" x-text="item.title"></h4>
-                        <div class="flex items-center justify-between mt-1 text-sm text-zinc-300">
-                            <span x-text="item.year"></span><span class="flex items-center gap-1 text-yellow-400 font-bold">★ <span x-text="item.vote_average"></span></span>
-                        </div>
-                    </div>
-                    <div x-show="item.local_status === 1" class="absolute top-2 left-2 px-2 py-1 bg-green-500 text-white text-[10px] font-bold rounded shadow-md z-10">✅ 已在库</div>
-                </div>
-            </template>
-        </div>
-    </div>
+        
+        <div class="marquee-wrapper">
+            
+            <div class="marquee-track scroll-left">
+                <template x-for="(item, index) in [...recommendRow1, ...recommendRow1]" :key="'r1'+index">
+                    <img :src="item.poster_path" @click="openModal(item)" class="marquee-poster bg-slate-200 dark:bg-[#111]">
+                </template>
+            </div>
 
-    <div x-show="searchResults.length === 0 && !isSearching && recommendResults.length > 0" class="mt-8 transition-opacity" x-cloak>
-        <h3 class="text-sm font-black text-slate-500 dark:text-zinc-400 mb-4 flex items-center gap-2 tracking-widest px-1">
-            <i class="fa-solid fa-fire text-rose-500"></i> 热门心愿探索
-        </h3>
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
-            <template x-for="item in recommendResults" :key="item.tmdb_id">
-                <div @click="openModal(item)" class="poster-card relative rounded-xl overflow-hidden cursor-pointer bg-slate-200 dark:bg-[#111] aspect-[2/3] ring-1 ring-black/5 dark:ring-white/5 group shadow-sm">
-                    <img :src="item.poster_path || '/static/img/logo-app-2.png'" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 pointer-events-none">
-                        <h4 class="font-bold text-white text-[10px] sm:text-xs line-clamp-1" x-text="item.title"></h4>
-                    </div>
-                </div>
-            </template>
+            <div class="marquee-track scroll-right" style="animation-duration: 85s;">
+                <template x-for="(item, index) in [...recommendRow2, ...recommendRow2]" :key="'r2'+index">
+                    <img :src="item.poster_path" @click="openModal(item)" class="marquee-poster bg-slate-200 dark:bg-[#111]">
+                </template>
+            </div>
+
+            <div class="marquee-track scroll-left" style="animation-duration: 65s;">
+                <template x-for="(item, index) in [...recommendRow3, ...recommendRow3]" :key="'r3'+index">
+                    <img :src="item.poster_path" @click="openModal(item)" class="marquee-poster bg-slate-200 dark:bg-[#111]">
+                </template>
+            </div>
+
         </div>
     </div>
-</div>

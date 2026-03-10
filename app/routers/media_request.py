@@ -598,7 +598,7 @@ def batch_feedback_action(data: BulkFeedbackActionModel, request: Request):
     conn.commit(); conn.close()
     return {"status": "success", "message": "批量操作已完成"}
 
-# 🔥 新增：安全热播榜 (修复 ID 类型与递归查询漏洞)
+# 🔥 新增：安全热播榜 (彻底告别 HTTP 请求自己，改用内部函数直调，零延迟防拒绝)
 @router.get("/api/requests/safe_top")
 def get_safe_top_media(category: str, request: Request):
     user = request.session.get("req_user")
@@ -606,29 +606,24 @@ def get_safe_top_media(category: str, request: Request):
     uid = user['Id']
     
     try:
-        port = cfg.get("port", 8000)
-        local_url = f"http://127.0.0.1:{port}/api/stats/top_movies?category={category}&sort_by=count"
-        global_res = requests.get(local_url, timeout=5).json()
+        # 🚨 核心修复：不再使用 requests.get 瞎绕圈子，直接把 stats.py 里的函数拉过来执行！
+        from app.routers.stats import api_top_movies
+        global_res = api_top_movies(user_id="all", category=category, sort_by="count")
         global_items = global_res.get("data", [])
         
         if not global_items:
             return {"status": "success", "data": []}
             
         candidate_items = global_items[:30]
-        # 提取本地 ID 列表
         item_ids = ",".join([str(i["ItemId"]) for i in candidate_items])
         
         host = (cfg.get("emby_host") or "").rstrip('/')
         key = cfg.get("emby_api_key")
         
-        # 🚨 关键修复 1：必须加上 Recursive=true，否则 Emby 无法跨层级查寻 ID
         emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&Recursive=true&api_key={key}"
         emby_res = requests.get(emby_url, timeout=5).json()
         
-        # 🚨 关键修复 2：把 Emby 返回的 ID 全部强转为字符串，消除类型鸿沟
         allowed_ids = {str(item["Id"]) for item in emby_res.get("Items", [])}
-        
-        # 两边全都使用 str() 进行字符串级别的比对，绝对精准
         safe_top_10 = [i for i in candidate_items if str(i["ItemId"]) in allowed_ids][:10]
         
         return {"status": "success", "data": safe_top_10}
@@ -637,7 +632,7 @@ def get_safe_top_media(category: str, request: Request):
         return {"status": "error", "data": []}
 
 
-# 🔥 新增：安全最新入库 (修复 ID 类型与递归查询漏洞)
+# 🔥 新增：安全最新入库 (内部函数直调版)
 @router.get("/api/requests/safe_latest")
 def get_safe_latest(limit: int = 15, request: Request = None):
     user = request.session.get("req_user")
@@ -645,9 +640,9 @@ def get_safe_latest(limit: int = 15, request: Request = None):
     uid = user['Id']
     
     try:
-        port = cfg.get("port", 8000)
-        local_url = f"http://127.0.0.1:{port}/api/stats/latest?limit=40"
-        global_res = requests.get(local_url, timeout=5).json()
+        # 🚨 核心修复：直接调用 api_latest_media
+        from app.routers.stats import api_latest_media
+        global_res = api_latest_media(limit=40)
         global_items = global_res.get("data", [])
         
         if not global_items:
@@ -658,16 +653,13 @@ def get_safe_latest(limit: int = 15, request: Request = None):
         host = (cfg.get("emby_host") or "").rstrip('/')
         key = cfg.get("emby_api_key")
         
-        # 🚨 关键修复 1：加上 Recursive=true
         emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&Recursive=true&api_key={key}"
         emby_res = requests.get(emby_url, timeout=5).json()
         
-        # 🚨 关键修复 2：全部强转为字符串集合
         allowed_ids = {str(item["Id"]) for item in emby_res.get("Items", [])}
         
         safe_items = []
         for i in global_items:
-            # 兼容 Id 和 ItemId 两种键名，并转为字符串
             i_id = str(i.get("Id") or i.get("ItemId"))
             if i_id in allowed_ids:
                 safe_items.append(i)

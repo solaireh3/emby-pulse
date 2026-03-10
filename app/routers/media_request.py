@@ -598,7 +598,7 @@ def batch_feedback_action(data: BulkFeedbackActionModel, request: Request):
     conn.commit(); conn.close()
     return {"status": "success", "message": "批量操作已完成"}
 
-# 🔥 新增：安全热播榜 (结合 Emby 原生权限，自动过滤屏蔽库与限制级内容)
+# 🔥 新增：安全热播榜 (修复 ID 类型与递归查询漏洞)
 @router.get("/api/requests/safe_top")
 def get_safe_top_media(category: str, request: Request):
     user = request.session.get("req_user")
@@ -606,7 +606,6 @@ def get_safe_top_media(category: str, request: Request):
     uid = user['Id']
     
     try:
-        # 1. 内部调用获取全服全局榜单 (多拿一点，备用过滤)
         port = cfg.get("port", 8000)
         local_url = f"http://127.0.0.1:{port}/api/stats/top_movies?category={category}&sort_by=count"
         global_res = requests.get(local_url, timeout=5).json()
@@ -615,28 +614,30 @@ def get_safe_top_media(category: str, request: Request):
         if not global_items:
             return {"status": "success", "data": []}
             
-        # 2. 截取前 30 名作为候选池，提取它们的 ItemId
         candidate_items = global_items[:30]
+        # 提取本地 ID 列表
         item_ids = ",".join([str(i["ItemId"]) for i in candidate_items])
         
-        # 3. 向 Emby 发起原生鉴权查询：这些 ID 中，当前用户能看到哪些？
         host = (cfg.get("emby_host") or "").rstrip('/')
         key = cfg.get("emby_api_key")
-        emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&api_key={key}"
+        
+        # 🚨 关键修复 1：必须加上 Recursive=true，否则 Emby 无法跨层级查寻 ID
+        emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&Recursive=true&api_key={key}"
         emby_res = requests.get(emby_url, timeout=5).json()
         
-        # 4. 拿到该用户有权限查看的合法 ID 集合
-        allowed_ids = {item["Id"] for item in emby_res.get("Items", [])}
+        # 🚨 关键修复 2：把 Emby 返回的 ID 全部强转为字符串，消除类型鸿沟
+        allowed_ids = {str(item["Id"]) for item in emby_res.get("Items", [])}
         
-        # 5. 交叉对比，过滤掉越权资源，只保留合法的，并截取前 10 名
-        safe_top_10 = [i for i in candidate_items if i["ItemId"] in allowed_ids][:10]
+        # 两边全都使用 str() 进行字符串级别的比对，绝对精准
+        safe_top_10 = [i for i in candidate_items if str(i["ItemId"]) in allowed_ids][:10]
         
         return {"status": "success", "data": safe_top_10}
     except Exception as e:
         print(f"安全热播榜生成失败: {e}")
         return {"status": "error", "data": []}
 
-# 🔥 新增：安全最新入库 (结合 Emby 原生权限，自动过滤屏蔽库与限制级内容)
+
+# 🔥 新增：安全最新入库 (修复 ID 类型与递归查询漏洞)
 @router.get("/api/requests/safe_latest")
 def get_safe_latest(limit: int = 15, request: Request = None):
     user = request.session.get("req_user")
@@ -644,7 +645,6 @@ def get_safe_latest(limit: int = 15, request: Request = None):
     uid = user['Id']
     
     try:
-        # 1. 内部调用获取全服最新入库 (多拿 40 条作为候选池备用过滤)
         port = cfg.get("port", 8000)
         local_url = f"http://127.0.0.1:{port}/api/stats/latest?limit=40"
         global_res = requests.get(local_url, timeout=5).json()
@@ -653,21 +653,21 @@ def get_safe_latest(limit: int = 15, request: Request = None):
         if not global_items:
             return {"status": "success", "data": []}
             
-        # 2. 提取这些最新资源的 Id (兼容 Id 和 ItemId 两种格式)
         item_ids = ",".join([str(i.get("Id") or i.get("ItemId")) for i in global_items])
         
-        # 3. 向 Emby 发起原生鉴权查询：这些 ID 中，当前用户能看到哪些？
         host = (cfg.get("emby_host") or "").rstrip('/')
         key = cfg.get("emby_api_key")
-        emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&api_key={key}"
+        
+        # 🚨 关键修复 1：加上 Recursive=true
+        emby_url = f"{host}/emby/Users/{uid}/Items?Ids={item_ids}&Recursive=true&api_key={key}"
         emby_res = requests.get(emby_url, timeout=5).json()
         
-        # 4. 拿到该用户有权限查看的合法 ID 集合 (全部转为字符串以防匹配失败)
+        # 🚨 关键修复 2：全部强转为字符串集合
         allowed_ids = {str(item["Id"]) for item in emby_res.get("Items", [])}
         
-        # 5. 交叉对比过滤，踢出没权限的资源，并截取前端需要的数量
         safe_items = []
         for i in global_items:
+            # 兼容 Id 和 ItemId 两种键名，并转为字符串
             i_id = str(i.get("Id") or i.get("ItemId"))
             if i_id in allowed_ids:
                 safe_items.append(i)

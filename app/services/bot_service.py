@@ -61,7 +61,8 @@ class SystemDaemon:
             bus.publish("notify.playback.stop", data)
         elif "auth" in event or "login" in event:
             bus.publish("notify.user.login", data)
-        elif "deleted" in event or "removed" in event:
+        # 🔥 终极修复：把 deleted 缩短为 delete，完美捕获 deep.delete 和 item.deleted
+        elif "delete" in event or "remove" in event:
             bus.publish("notify.item.deleted", data)
 
     def _get_admin_id(self):

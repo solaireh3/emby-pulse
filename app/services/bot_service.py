@@ -12,14 +12,12 @@ from collections import defaultdict
 from app.core.config import cfg, REPORT_COVER_URL, FALLBACK_IMAGE_URL
 from app.core.database import query_db, get_base_filter
 from app.services.report_service import report_gen, HAS_PIL
-# 🔥 引入事件总线
 from app.core.event_bus import bus
 
 logger = logging.getLogger("uvicorn")
 
 # ==============================================================================
 # 🧠 第一层：潜意识核心 (System Daemon)
-# 职责：处理缺集闭环、求片核销、刮削数据收集，不受任何通知开关控制，永远在线。
 # ==============================================================================
 class SystemDaemon:
     def __init__(self):
@@ -32,7 +30,6 @@ class SystemDaemon:
         self.last_check_min = -1
         self.last_sync_min = -1
         
-        # 订阅感知层的心跳
         bus.subscribe("webhook.received", self.on_webhook_event)
         
     def start(self):
@@ -49,12 +46,10 @@ class SystemDaemon:
     def stop(self): self.running = False
 
     def on_webhook_event(self, event: str, data: dict):
-        """精准提取系统关注的核心事件"""
         if "item.added" in event or "library.new" in event:
             item = data.get("Item", {})
             if item.get("Id"):
                 self.add_library_task(item)
-                # 单集的同步与缺集闭环
                 if item.get("Type") == "Episode":
                     from app.services.calendar_service import calendar_service
                     calendar_service.mark_episode_ready(item.get("SeriesId"), item.get("ParentIndexNumber"), item.get("IndexNumber"))
@@ -64,7 +59,6 @@ class SystemDaemon:
             bus.publish("notify.playback.start", data)
         elif "playback.stop" in event:
             bus.publish("notify.playback.stop", data)
-        # 🔥 史诗级修复：把 authentication 缩短为 auth，完美匹配 Emby 的 user.authenticated
         elif "auth" in event or "login" in event:
             bus.publish("notify.user.login", data)
         elif "deleted" in event or "removed" in event:
@@ -128,19 +122,14 @@ class SystemDaemon:
                     time.sleep(2)
                     continue
 
-                idle_time = 0
-                last_len = 0
-                max_wait = 0
-                
+                idle_time = 0; last_len = 0; max_wait = 0
                 while idle_time < 15 and max_wait < 120:
                     time.sleep(3)
-                    idle_time += 3
-                    max_wait += 3
+                    idle_time += 3; max_wait += 3
                     with self.library_lock:
                         curr_len = len(self.library_queue)
                         if curr_len > last_len:
-                            idle_time = 0 
-                            last_len = curr_len
+                            idle_time = 0; last_len = curr_len
                 
                 items_to_process = []
                 with self.library_lock:
@@ -152,7 +141,6 @@ class SystemDaemon:
                 time.sleep(5)
 
     def _process_library_group(self, items):
-        # ⚠️ 此处强制解耦：不论通不通知，系统业务必须执行！
         groups = defaultdict(list)
         for item in items:
             itype = item.get('Type')
@@ -171,8 +159,7 @@ class SystemDaemon:
                 is_tv = any(x.get('Type') in ['Episode', 'Season', 'Series'] for x in group_items)
                 if is_tv:
                     fresh_episodes = self._check_fresh_episodes(group_id)
-                    if fresh_episodes: 
-                        self._push_episode_group(group_id, fresh_episodes)
+                    if fresh_episodes: self._push_episode_group(group_id, fresh_episodes)
                     else:
                         series_item = next((x for x in group_items if x.get('Type') == 'Series'), None)
                         if series_item: self._push_single_item(series_item)
@@ -195,21 +182,18 @@ class SystemDaemon:
             if res.status_code != 200: return []
             items = res.json().get("Items", [])
             if not items: return []
-            fresh_list = []
-            last_time = None
+            fresh_list = []; last_time = None
             for i, item in enumerate(items):
                 curr_time = self._parse_emby_time(item.get("DateCreated"))
                 if not curr_time: 
                     if i == 0: fresh_list.append(item)
                     break
                 if i == 0:
-                    fresh_list.append(item)
-                    last_time = curr_time
+                    fresh_list.append(item); last_time = curr_time
                 else:
                     delta = abs((last_time - curr_time).total_seconds())
                     if delta <= 120:  
-                        fresh_list.append(item)
-                        last_time = curr_time 
+                        fresh_list.append(item); last_time = curr_time 
                     else: break 
             return fresh_list
         except Exception as e: return []
@@ -225,8 +209,7 @@ class SystemDaemon:
     def _push_episode_group(self, series_id, episodes):
         try:
             for ep in episodes:
-                s_idx = ep.get('ParentIndexNumber')
-                e_idx = ep.get('IndexNumber')
+                s_idx = ep.get('ParentIndexNumber'); e_idx = ep.get('IndexNumber')
                 if s_idx is None or e_idx is None: continue
                 res = query_db("SELECT id FROM gap_records WHERE series_id=? AND season_number=? AND episode_number=? AND status=2", (series_id, s_idx, e_idx))
                 if res:
@@ -234,9 +217,7 @@ class SystemDaemon:
                     bus.publish("notify.gap_cleared", {"s_idx": s_idx, "e_idx": e_idx})
         except Exception as e: pass
 
-        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
-        admin_id = self._get_admin_id()
-        series_info = {}
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host"); admin_id = self._get_admin_id(); series_info = {}
         try:
             url = f"{host}/emby/Users/{admin_id}/Items/{series_id}?api_key={key}"
             res = requests.get(url, timeout=10)
@@ -246,8 +227,6 @@ class SystemDaemon:
 
         st_tmdb = series_info.get("ProviderIds", {}).get("Tmdb")
         if st_tmdb: self._auto_finish_request(st_tmdb)
-
-        # 业务完成，抛给喇叭决定发不发
         bus.publish("notify.library.new_episode", { "series_id": series_id, "episodes": episodes, "series_info": series_info })
 
     def _push_single_item(self, item):
@@ -259,7 +238,6 @@ class SystemDaemon:
         except: pass
         tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
         if tmdb_id: self._auto_finish_request(tmdb_id)
-        
         bus.publish("notify.library.new_item", item)
 
     def _scheduler_loop(self):
@@ -271,11 +249,9 @@ class SystemDaemon:
                     if now.hour == 9 and now.minute == 0:
                         self._check_user_expiration()
                         bus.publish("notify.daily_report")
-                            
                 if now.minute % 10 == 0 and now.minute != self.last_sync_min:
                     self.last_sync_min = now.minute
                     self._sync_pending_requests()
-                    
                 time.sleep(5)
             except: time.sleep(60)
 
@@ -286,22 +262,18 @@ class SystemDaemon:
             host = cfg.get("emby_host"); key = cfg.get("emby_api_key")
             admin_id = self._get_admin_id()
             if not admin_id: return
-            
             for r in rows:
                 tid = r['tmdb_id']; mtype = r['media_type']; sn = r['season']
                 type_filter = "Movie" if mtype == "movie" else "Series"
                 url = f"{host}/emby/Users/{admin_id}/Items?AnyProviderIdEquals=tmdb.{tid}&IncludeItemTypes={type_filter}&Recursive=true&api_key={key}"
                 res = requests.get(url, timeout=5).json()
-                
                 if res.get("Items"):
-                    if mtype == "movie":
-                        query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (tid,))
+                    if mtype == "movie": query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (tid,))
                     else:
                         sid = res["Items"][0]["Id"]
                         s_res = requests.get(f"{host}/emby/Shows/{sid}/Seasons?api_key={key}&UserId={admin_id}", timeout=5).json()
                         local_seasons = [s.get("IndexNumber") for s in s_res.get("Items", [])]
-                        if sn in local_seasons:
-                            query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND season = ?", (tid, sn))
+                        if sn in local_seasons: query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND season = ?", (tid, sn))
                 time.sleep(0.5) 
         except Exception as e: pass
 
@@ -320,7 +292,6 @@ class SystemDaemon:
 
 # ==============================================================================
 # 📣 第二层：表达层 (Notification Bot)
-# 职责：严格根据 Config 里的颗粒度开关，决定是否对外推流。
 # ==============================================================================
 class NotificationBot:
     def __init__(self):
@@ -345,14 +316,11 @@ class NotificationBot:
         if self.running: return
         if not cfg.get("tg_bot_token") and not cfg.get("wecom_corpid"): return
         self.running = True
-        
         self._set_commands()
         self._set_wecom_menu() 
-        
         if cfg.get("tg_bot_token"):
             self.poll_thread = threading.Thread(target=self._polling_loop, daemon=True)
             self.poll_thread.start()
-        
         logger.info("🤖 Notification Bot Started")
 
     def stop(self): self.running = False
@@ -487,37 +455,59 @@ class NotificationBot:
             self.send_photo("sys_notify", tg_img, msg, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
         except Exception as e: pass
 
+    # 🔥 史诗级重构：登录图文推送 (兼容 TG 与 企微)
     def on_user_login(self, data):
         if not cfg.get("notify_user_login"): return
         try:
             user = data.get("User") or {}
             session = data.get("Session") or {}
             
-            # 🔥 强兼容：有些老版本/第三方客户端验证时，外层没有包 Session 结构
             ip = session.get("RemoteEndPoint") or data.get("RemoteEndPoint") or "127.0.0.1"
             loc = self._get_location(ip)
             client = session.get("Client") or data.get("Client") or data.get("AppName") or "未知设备"
             dev_name = session.get("DeviceName") or data.get("DeviceName") or "未知终端"
             user_name = user.get("Name") or data.get("Title") or data.get("UserName") or "未知账号"
+            user_id = user.get("Id") or data.get("UserId")
             
-            msg = (f"🔐 <b>【{user_name}】登录了媒体库</b>\n\n"
-                   f"🌐 地址：{ip} ({loc})\n📱 设备：{client} on {dev_name}\n"
-                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            self.send_message("sys_notify", msg, platform="all")
+            msg = (f"🔐 <b>安全预警：账号登录</b>\n\n"
+                   f"👤 <b>用户：</b>{user_name}\n"
+                   f"🌐 <b>网络：</b>{ip} ({loc})\n"
+                   f"📱 <b>设备：</b>{client} ({dev_name})\n"
+                   f"🕒 <b>时间：</b>{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            avatar_io = self._download_user_image(user_id) if user_id else None
+            # 若 Emby 未设置头像，使用 DiceBear 智能生成炫酷专属头像
+            fallback_img = "https://api.dicebear.com/9.x/notionists/png?seed=" + urllib.parse.quote(user_name)
+            
+            tg_img = avatar_io or fallback_img
+            # 采用 send_photo，企微端会自动转化为带左侧小图的图文 News 卡片
+            self.send_photo("sys_notify", tg_img, msg, platform="all", wecom_photo_io=tg_img)
         except Exception as e: 
             logger.error(f"登录通知组装异常: {e}")
 
+    # 🔥 史诗级重构：删除图文推送 (兼容 TG 与 企微)
     def on_item_deleted(self, data):
         if not cfg.get("notify_item_deleted"): return
         try:
-            # 🔥 强兼容：有些版本删除时，不传外层 Item，直接把 Title 放在最外层
             item = data.get("Item") or data
             title = item.get("Name") or item.get("Title") or "未知资源"
             if item.get("SeriesName"): title = f"{item.get('SeriesName')} - {title}"
             
-            msg = (f"🗑️ <b>资源物理删除预警</b>\n\n"
-                   f"🎬 内容：{title}\n🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            self.send_message("sys_notify", msg, platform="all")
+            year = item.get("ProductionYear", "")
+            year_str = f" ({year})" if year else ""
+            
+            msg = (f"🗑️ <b>系统通知：媒体已删除</b>\n\n"
+                   f"🎬 <b>内容：</b>{title}{year_str}\n"
+                   f"🕒 <b>时间：</b>{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                   f"<i>* 该项目已从媒体库中被永久移除。</i>")
+            
+            # 删除后大概率抓不到图，做双重容灾获取
+            primary_io = self._download_emby_image(item.get("Id"), 'Primary') if item.get("Id") else None
+            backdrop_io = self._download_emby_image(item.get("Id"), 'Backdrop') if item.get("Id") else None
+            
+            tg_img = primary_io or backdrop_io or REPORT_COVER_URL
+            
+            self.send_photo("sys_notify", tg_img, msg, platform="all", wecom_photo_io=tg_img)
         except Exception as e: 
             logger.error(f"删除通知组装异常: {e}")
 
@@ -540,6 +530,17 @@ class NotificationBot:
     def _get_proxies(self):
         proxy = cfg.get("proxy_url")
         return {"http": proxy, "https": proxy} if proxy else None
+
+    # 🔥 新增工具：专门提取用户头像
+    def _download_user_image(self, user_id):
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+        if not key or not host or not user_id: return None
+        try:
+            url = f"{host}/emby/Users/{user_id}/Images/Primary?maxHeight=400&maxWidth=400&quality=90&api_key={key}"
+            res = requests.get(url, timeout=5)
+            if res.status_code == 200: return io.BytesIO(res.content)
+        except: pass
+        return None
 
     def _get_admin_id(self):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
@@ -1139,7 +1140,7 @@ class NotificationBot:
 
 
 # ==============================================================================
-# 🎮 终极包装层：兼容原所有的 bot.start() 等调用
+# 🎮 终极包装层
 # ==============================================================================
 class EmbyPulseOrchestrator:
     def __init__(self):
@@ -1163,5 +1164,17 @@ class EmbyPulseOrchestrator:
     def push_playback_event(self, data, action="start"):
         bus.publish("webhook.received", f"playback.{action}", data)
 
-# 暴露单例
+    # 🔥 史诗级修复：增加向下透传的网关，完美接管企微回调和任何外部指令
+    def _handle_message(self, text, cid, platform="tg"):
+        self.notifier._handle_message(text, cid, platform)
+
+    def _handle_callback(self, cq):
+        self.notifier._handle_callback(cq)
+
+    def send_message(self, chat_id, text, parse_mode="HTML", reply_markup=None, platform="all"):
+        self.notifier.send_message(chat_id, text, parse_mode, reply_markup, platform)
+
+    def send_photo(self, chat_id, photo_io, caption, parse_mode="HTML", reply_markup=None, platform="all", wecom_photo_io=None):
+        self.notifier.send_photo(chat_id, photo_io, caption, parse_mode, reply_markup, platform, wecom_photo_io)
+
 bot = EmbyPulseOrchestrator()

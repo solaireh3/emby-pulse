@@ -11,7 +11,7 @@ def api_get_settings(request: Request):
     return {
         "status": "success",
         "data": {
-            "server_type": cfg.get("server_type", "emby"), # 🔥 暴露给前端的引擎类型
+            "server_type": cfg.get("server_type", "emby"), 
             "emby_host": cfg.get("emby_host"),
             "emby_api_key": cfg.get("emby_api_key"),
             "tmdb_api_key": cfg.get("tmdb_api_key"),
@@ -24,9 +24,9 @@ def api_get_settings(request: Request):
             "moviepilot_url": cfg.get("moviepilot_url", ""),
             "moviepilot_token": cfg.get("moviepilot_token", ""),
             "pulse_url": cfg.get("pulse_url", ""),
-            "playback_data_mode": cfg.get("playback_data_mode", "sqlite")
-            "notify_user_login": cfg.get("notify_user_login", False),    # 🔥 补上这行
-            "notify_item_deleted": cfg.get("notify_item_deleted", False) # 🔥 补上这行
+            "playback_data_mode": cfg.get("playback_data_mode", "sqlite"), # 🔥 就是这里之前少了个逗号
+            "notify_user_login": cfg.get("notify_user_login", False),
+            "notify_item_deleted": cfg.get("notify_item_deleted", False)
         }
     }
 
@@ -34,7 +34,6 @@ def api_get_settings(request: Request):
 def api_update_settings(data: SettingsModel, request: Request):
     if not request.session.get("user"): return {"status": "error"}
     
-    # 🔥 智能验证新配置 (兼容 Jellyfin 鉴权与路径)
     server_type = getattr(data, "server_type", "emby")
     url = f"{data.emby_host}/System/Info" if server_type == "jellyfin" else f"{data.emby_host}/emby/System/Info"
     headers = {"Authorization": f'MediaBrowser Token="{data.emby_api_key}"'} if server_type == "jellyfin" else {"X-Emby-Token": data.emby_api_key}
@@ -60,8 +59,9 @@ def api_update_settings(data: SettingsModel, request: Request):
     cfg["moviepilot_token"] = data.moviepilot_token
     cfg["pulse_url"] = data.pulse_url
     cfg["playback_data_mode"] = getattr(data, "playback_data_mode", "sqlite")
-    cfg["notify_user_login"] = getattr(data, "notify_user_login", False)     # 🔥 补上这行
-    cfg["notify_item_deleted"] = getattr(data, "notify_item_deleted", False) # 🔥 补上这行
+    cfg["notify_user_login"] = getattr(data, "notify_user_login", False)
+    cfg["notify_item_deleted"] = getattr(data, "notify_item_deleted", False)
+    
     save_config()
     
     return {"status": "success", "message": "配置已保存"}

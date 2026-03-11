@@ -1,5 +1,7 @@
 import os
 import asyncio
+import threading
+import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -22,10 +24,26 @@ if not os.path.exists(CONFIG_DIR): os.makedirs(CONFIG_DIR)
 if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
 init_db()
 
+# ==============================================================================
+# 🔥 黑客级双开引擎：在子线程强行拉起 10308 (无视 Docker 限制)
+# ==============================================================================
+def start_user_portal():
+    print("🎈 [User Portal] 求片中心专属端口 10308 已在后台独立线程启动！")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    # log_level="error" 是为了防止双端口的访问日志在控制台里互相打架
+    config = uvicorn.Config(app, host="0.0.0.0", port=10308, log_level="error")
+    server = uvicorn.Server(config)
+    loop.run_until_complete(server.serve())
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Starting EmbyPulse...")
     bot.start()
+    
+    # 🌟 在应用启动时，偷偷开个线程把 10308 端口跑起来
+    threading.Thread(target=start_user_portal, daemon=True).start()
+    
     yield
     print("🛑 Stopping EmbyPulse...")
     bot.stop()
@@ -86,26 +104,5 @@ app.include_router(search.router)
 app.include_router(clients.router)
 app.include_router(gaps.router)
 
-# ==============================================================================
-# 🔥 原生双端口启动引擎 (完美适配 Host 模式)
-# ==============================================================================
 if __name__ == "__main__":
-    import uvicorn
-
-    async def start_dual_ports():
-        print(f"🌍 [Admin Portal] 管理员后台已运行在端口: {PORT}")
-        print(f"🎈 [User Portal]  求片中心已运行在端口: 10308")
-        
-        # 实例 1: 监听原有后台端口 (默认 10307)
-        config_admin = uvicorn.Config(app, host="0.0.0.0", port=PORT)
-        server_admin = uvicorn.Server(config_admin)
-        
-        # 实例 2: 强制监听用户专属端口 (10308)
-        config_user = uvicorn.Config(app, host="0.0.0.0", port=10308)
-        server_user = uvicorn.Server(config_user)
-        
-        # 并发启动两个端口监听
-        await asyncio.gather(server_admin.serve(), server_user.serve())
-
-    # 运行双端口服务
-    asyncio.run(start_dual_ports())
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

@@ -10,7 +10,6 @@ import re
 import ipaddress
 from collections import defaultdict
 from app.core.config import cfg, REPORT_COVER_URL, FALLBACK_IMAGE_URL
-# 👇 修复点：引入 add_sys_notification
 from app.core.database import query_db, get_base_filter, add_sys_notification
 from app.services.report_service import report_gen, HAS_PIL
 from app.core.event_bus import bus
@@ -311,7 +310,6 @@ class NotificationBot:
                f"⚠️ <i>天眼系统已记录，请立即进行处置！</i>")
         
         keyboard = {"inline_keyboard": []}
-        
         if uid:
             keyboard["inline_keyboard"].append([{"text": "🚫 立即封禁此违规账号", "callback_data": f"risk_ban_{uid}"}])
             
@@ -322,7 +320,6 @@ class NotificationBot:
             
         self.send_message("sys_notify", msg, reply_markup=keyboard if keyboard["inline_keyboard"] else None, platform="all")
 
-        # 👇 新增：写入全局通知中心
         try:
             add_sys_notification(
                 notify_type="risk",
@@ -419,6 +416,15 @@ class NotificationBot:
         wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
         self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
 
+    # 🔥 辅助方法：将 Ticks 转换为时分秒
+    def _format_ticks(self, ticks):
+        if not ticks: return "00:00:00"
+        total_seconds = int(ticks / 10000000)
+        h = total_seconds // 3600
+        m = (total_seconds % 3600) // 60
+        s = total_seconds % 60
+        return f"{h:02}:{m:02}:{s:02}"
+
     def on_playback_event(self, data, action):
         if not cfg.get("enable_notify"): return
         try:
@@ -439,8 +445,19 @@ class NotificationBot:
             emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
             ip = session.get("RemoteEndPoint", "127.0.0.1"); loc = self._get_location(ip)
             
+            # 🔥 提取并计算播放进度
+            pos_ticks = session.get("PlayState", {}).get("PositionTicks", 0)
+            run_ticks = item.get("RunTimeTicks", 1) or 1
+            pct = int((pos_ticks / run_ticks) * 100) if run_ticks > 1 else 0
+            pct = min(max(pct, 0), 100)
+            pos_str = self._format_ticks(pos_ticks)
+            run_str = self._format_ticks(run_ticks)
+
             msg = (f"{emoji} <b>【{user.get('Name')}】{act} {type_cn} {title}</b>{ep_info}\n\n"
-                   f"🌐 地址：{ip} ({loc})\n📱 设备：{session.get('Client')} on {session.get('DeviceName')}\n🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                   f"⏱️ <b>进度</b>：<code>{pos_str} / {run_str} ({pct}%)</code>\n"
+                   f"🌐 <b>地址</b>：{ip} ({loc})\n"
+                   f"📱 <b>设备</b>：{session.get('Client')} on {session.get('DeviceName')}\n"
+                   f"🕒 <b>时间</b>：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
             target_id = item.get("Id")
             if raw_type == "Episode" and item.get("SeriesId"): target_id = item.get("SeriesId")
@@ -587,6 +604,23 @@ class NotificationBot:
         except: pass
         return self.user_cache.get(user_id, "Unknown User")
 
+    # 🔥 黑科技：IPv6 子网提取器，锁死国内移动/宽带不断变动的后缀
+    def _get_subnet_key(self, ip):
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.version == 6:
+                parts = ip_obj.exploded.split(':')
+                return ':'.join(parts[:4]) + '::/64' # 取前 64 位作为唯一凭证
+            return ip
+        except: return ip
+
+    # 🔥 文本脱水器：清理冗余地名和国内运营商信息
+    def _clean_location(self, loc):
+        if not loc: return ""
+        loc = re.sub(r'(中国|省|市|自治区|自治州|特别行政区|移动|联通|电信|铁通|教育网|广电|通信|数据中心|IDC)', ' ', loc)
+        loc = re.sub(r'\s+', ' ', loc).strip() # 压缩连放空格
+        return loc
+
     def _get_location(self, ip):
         if not ip: return "未知"
         is_ipv6 = False
@@ -596,32 +630,52 @@ class NotificationBot:
             is_ipv6 = (ip_obj.version == 6)
         except: pass
         
-        if ip in self.ip_cache: return self.ip_cache[ip]
-        loc = ""
-        headers = {"User-Agent": "Mozilla/5.0"}
-        try:
-            res = requests.get(f"https://forge.speedtest.cn/api/location/info?ip={ip}", headers=headers, timeout=3)
-            if res.status_code == 200:
-                d = res.json()
-                if d.get("country"): loc = f"{d.get('country')} {d.get('province', '')} {d.get('city', '')} {d.get('isp', '')}".strip()
-        except: pass
+        # 匹配子网缓存，防飘移
+        cache_key = self._get_subnet_key(ip)
+        if cache_key in self.ip_cache: return self.ip_cache[cache_key]
 
-        if not loc or "上饶" in loc:
+        loc = ""
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+        # 🚀 瀑布流第一层：Bilibili API (国内顶尖，对 IPv6 解析极其精准)
+        if not loc:
             try:
-                res = requests.get(f"http://ip-api.com/json/{ip}?lang=zh-CN", headers=headers, timeout=3)
+                res = requests.get(f"https://api.bilibili.com/x/web-interface/zone?ip={ip}", headers=headers, timeout=3)
                 if res.status_code == 200:
-                    d = res.json()
-                    if d.get('status') == 'success': loc = f"{d.get('country', '')} {d.get('regionName', '')} {d.get('city', '')}".strip()
+                    d = res.json().get('data', {})
+                    if d and d.get('country') == '中国':
+                        loc = f"{d.get('province', '')} {d.get('city', '')}"
+                    elif d:
+                        loc = f"{d.get('country', '')} {d.get('province', '')}"
             except: pass
 
+        # 🚀 瀑布流第二层：PConline 太平洋网络 (老牌权威 API)
+        if not loc:
+            try:
+                res = requests.get(f"https://whois.pconline.com.cn/ipJson.jsp?ip={ip}&json=true", headers=headers, timeout=3)
+                if res.status_code == 200:
+                    d = res.json()
+                    if d.get('pro') or d.get('city'):
+                        loc = f"{d.get('pro', '')} {d.get('city', '')}"
+            except: pass
+
+        # 🚀 瀑布流兜底层：Speedtest 测速网
+        if not loc:
+            try:
+                res = requests.get(f"https://forge.speedtest.cn/api/location/info?ip={ip}", headers=headers, timeout=3)
+                if res.status_code == 200:
+                    d = res.json()
+                    if d.get("country"): loc = f"{d.get('country')} {d.get('province', '')} {d.get('city', '')}"
+            except: pass
+
+        # 脱水清洗
+        loc = self._clean_location(loc)
         if not loc: loc = "IPv6 节点" if is_ipv6 else "未知地区"
-        else:
-            loc = loc.replace("省", "").replace("市", "").replace("中国 中国", "中国").strip()
-            loc = re.sub(r'\s+', ' ', loc)
             
-        if loc != "未知地区" and "上饶" not in loc:
+        if loc != "未知地区":
             if len(self.ip_cache) > 1000: self.ip_cache.clear()
-            self.ip_cache[ip] = loc
+            self.ip_cache[cache_key] = loc # 缓存锁死当前子网区域
+            
         return loc
 
     def _download_emby_image(self, item_id, img_type='Primary', image_tag=None):
@@ -908,7 +962,7 @@ class NotificationBot:
     def _set_commands(self):
         token = cfg.get("tg_bot_token")
         if not token: return
-        cmds = [{"command": "search", "description": "🔍 搜索资源"}, {"command": "stats", "description": "📊 今日日报"}, {"command": "weekly", "description": "📅 本周周报"}, {"command": "monthly", "description": "🗓️ 本月月报"}, {"command": "yearly", "description": "📜 年度总结"}, {"command": "now", "description": "🟢 正在播放"}, {"command": "latest", "description": "🆕 最近入库"}, {"command": "recent", "description": "📜 最近播放记录"}, {"command": "check", "description": "📡 系统检查"}, {"command": "help", "description": "🤖 帮助菜单"}]
+        cmds = [{"command": "search", "description": "🔍 搜索资源"}, {"command": "stats", "description": "📊 今日日报"}, {"command": "weekly", "description": "📅 本周周报"}, {"command": "monthly", "description": "🗓️ 本月月报"}, {"command": "yearly", "description": "📜 年度总结"}, {"command": "now", "description": "🟢 正在播放"}, {"command": "latest", "description": "🆕 最近入库"}, {"command": "recent", "description": "📜 最近播放记录"}, {"command": "check", "description": "📡 系统探针"}, {"command": "help", "description": "🤖 帮助菜单"}]
         try: requests.post(f"https://api.telegram.org/bot{token}/setMyCommands", json={"commands": cmds}, proxies=self._get_proxies(), timeout=10)
         except: pass
 
@@ -925,32 +979,37 @@ class NotificationBot:
         elif text.startswith("/check"): self._cmd_check(cid, platform)
         elif text.startswith("/help"): self._cmd_help(cid, platform)
 
+    # 🔥 修复 3: /latest 异常崩溃，采用安全遍历和稳定接口
     def _cmd_latest(self, cid, platform):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
         try:
             user_id = self._get_admin_id()
             if not user_id: return self.send_message(cid, "❌ 错误: 无法获取 Emby 用户身份", platform=platform)
             fields = "DateCreated,Name,SeriesName,ProductionYear,Type"
-            url = f"{host}/emby/Users/{user_id}/Items/Latest"
-            params = {"Limit": 8, "MediaTypes": "Video", "Fields": fields, "api_key": key}
+            url = f"{host}/emby/Users/{user_id}/Items"
+            params = {"IncludeItemTypes": "Movie,Episode", "Recursive": "true", "SortBy": "DateCreated", "SortOrder": "Descending", "Limit": 8, "Fields": fields, "api_key": key}
+            
             res = requests.get(url, params=params, timeout=15)
             if res.status_code != 200: return self.send_message(cid, f"❌ 查询失败", platform=platform)
-            items = res.json()
+            
+            items = res.json().get("Items", [])
             if not items: return self.send_message(cid, "📭 最近没有新入库的资源", platform=platform)
 
             msg = "🆕 <b>最近入库 (Top 8)</b>\n\n"
-            count = 0
             for i in items:
-                if count >= 8: break
-                if i.get("Type") not in ["Movie", "Series", "Episode"]: continue
-                name = i.get("Name")
-                if i.get("SeriesName"): name = f"{i.get('SeriesName')} - {name}"
-                date_str = i.get("DateCreated", "")[:10]
+                name = i.get("Name", "未知")
+                if i.get("Type") == "Episode" and i.get("SeriesName"):
+                    name = f"{i.get('SeriesName')} - {name}"
+                
+                date_raw = i.get("DateCreated")
+                date_str = date_raw[:10] if date_raw else "未知时间"
                 type_icon = "🎬" if i.get("Type") == "Movie" else "📺"
-                msg += f"{type_icon} {date_str} | <b>{name}</b>\n"
-                count += 1
+                
+                msg += f"{type_icon} <code>{date_str}</code> | <b>{name}</b>\n"
+                
             self.send_message(cid, msg.strip(), platform=platform)
         except Exception as e:
+            logger.error(f"[Bot] latest query error: {e}")
             self.send_message(cid, f"❌ 查询异常", platform=platform)
 
     def _extract_tech_info(self, item):
@@ -1107,21 +1166,41 @@ class NotificationBot:
         except Exception as e:
             self.send_message(chat_id, f"❌ 统计失败", platform=platform)
 
+    # 🔥 修复 4: /now 显示剧集名并加入文本进度条
     def _cmd_now(self, cid, platform):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
         try:
             res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=5)
             sessions = [s for s in res.json() if s.get("NowPlayingItem")]
-            if not sessions: return self.send_message(cid, "🟢 当前无播放", platform=platform)
+            if not sessions: return self.send_message(cid, "🟢 当前无人在看", platform=platform)
             
-            msg = f"🟢 <b>当前正在播放 ({len(sessions)})</b>\n\n"
+            msg = f"🟢 <b>当前正在播放 ({len(sessions)} 人)</b>\n\n"
             for s in sessions:
-                title = s['NowPlayingItem'].get('Name')
-                pct = int(s.get('PlayState', {}).get('PositionTicks', 0) / s['NowPlayingItem'].get('RunTimeTicks', 1) * 100)
-                msg += f"👤 <b>{s.get('UserName')}</b>  [ 🔄 {pct}% ]\n📺 {title}\n\n"
+                item = s.get('NowPlayingItem', {})
+                title = item.get('Name', '未知')
+                if item.get("Type") == "Episode" and item.get("SeriesName"):
+                    title = f"《{item.get('SeriesName')}》 {title}"
+                elif item.get("Type") == "Movie":
+                    title = f"《{title}》"
+                
+                client = s.get("Client", "未知端")
+                username = s.get('UserName', '未知用户')
+                
+                play_state = s.get('PlayState', {})
+                pos_ticks = play_state.get('PositionTicks', 0)
+                run_ticks = item.get('RunTimeTicks', 1) or 1
+                pct = int((pos_ticks / run_ticks) * 100)
+                pct = min(max(pct, 0), 100)
+                
+                # 动态生成 10 格文本进度条
+                filled = int(pct / 10)
+                bar = "█" * filled + "⚪️" * (10 - filled)
+                
+                msg += f"👤 <b>{username}</b> ({client})\n📺 {title}\n⏳ <code>[{bar}] {pct}%</code>\n\n"
             self.send_message(cid, msg.strip(), platform=platform)
         except: self.send_message(cid, "❌ 连接失败", platform=platform)
 
+    # 🔥 修复 2: /recent 单行紧凑排版，去除冗余横线
     def _cmd_recent(self, cid, platform):
         try:
             rows = query_db("SELECT UserId, ItemName, DateCreated FROM PlaybackActivity ORDER BY DateCreated DESC LIMIT 10")
@@ -1129,13 +1208,15 @@ class NotificationBot:
             
             msg = "📜 <b>最近播放记录 (Top 10)</b>\n\n"
             for r in rows:
-                date = r['DateCreated'][:16].replace('T', ' ')
+                date = r['DateCreated'][5:16].replace('T', ' ')
                 name = self._get_username(r['UserId'])
-                msg += f"👤 <b>{name}</b> | ⏰ {date}\n🎬 {r['ItemName']}\n\n"
+                item_name = r['ItemName'].replace(' - ', ' ')
+                msg += f"▫️ <code>{date}</code> | 👤 <b>{name}</b> > {item_name}\n"
             self.send_message(cid, msg.strip(), platform=platform)
         except Exception as e: 
             self.send_message(cid, f"❌ 查询失败", platform=platform)
 
+    # 🔥 修复 1: /check 高级服务器探针 (带容量大盘与空容错)
     def _cmd_check(self, cid, platform):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
         start = time.time()
@@ -1143,14 +1224,36 @@ class NotificationBot:
             res = requests.get(f"{host}/emby/System/Info?api_key={key}", timeout=5)
             if res.status_code == 200:
                 info = res.json()
-                local = (info.get('LocalAddresses') or [info.get('LocalAddress')])[0]
-                wan = (info.get('RemoteAddresses') or [info.get('WanAddress')])[0]
-                msg = (f"✅ <b>Emby 服务器状态：在线</b>\n\n"
-                       f"⚡️ 响应延迟：{int((time.time()-start)*1000)} ms\n"
-                       f"🏠 内网地址：{local}\n"
-                       f"🌍 外网地址：{wan}")
+                delay = int((time.time()-start)*1000)
+                version = info.get('Version', '未知')
+                os_name = info.get('OperatingSystem', '未知')
+                
+                # 尝试获取媒体库大盘
+                movie_count = series_count = ep_count = 0
+                try:
+                    c_res = requests.get(f"{host}/emby/Items/Counts?api_key={key}", timeout=3).json()
+                    movie_count = c_res.get('MovieCount', 0)
+                    series_count = c_res.get('SeriesCount', 0)
+                    ep_count = c_res.get('EpisodeCount', 0)
+                except: pass
+                
+                # 尝试获取在线人数
+                active_users = 0
+                try:
+                    s_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=3).json()
+                    active_users = len([s for s in s_res if s.get("NowPlayingItem")])
+                except: pass
+
+                msg = (f"📡 <b>Emby 服务器状态探针</b>\n\n"
+                       f"🟢 <b>运行状态</b>：在线 (响应延迟: {delay}ms)\n"
+                       f"🏷️ <b>系统版本</b>：Emby Server {version}\n"
+                       f"💻 <b>宿主环境</b>：{os_name}\n\n"
+                       f"📊 <b>媒体库容量</b>\n"
+                       f"🎬 电影：{movie_count} 部\n"
+                       f"📺 剧集：{series_count} 部 (共 {ep_count} 集)\n\n"
+                       f"👥 <b>当前活跃</b>：{active_users} 人正在观看")
                 self.send_message(cid, msg, platform=platform)
-        except: self.send_message(cid, "❌ 离线", platform=platform)
+        except: self.send_message(cid, "❌ 离线或无法连接到服务器", platform=platform)
 
     def _cmd_help(self, cid, platform):
         msg = ("🤖 <b>EmbyPulse 智能助理指南</b>\n\n"
@@ -1165,7 +1268,7 @@ class NotificationBot:
                "/recent - 查看本站最近的 10 条播放历史\n"
                "/search [关键词] - 搜索影视资源并获取直达链接\n\n"
                "🛠 <b>系统管理指令</b>\n"
-               "/check - 测试 Emby 服务器连通性与网络延迟\n"
+               "/check - 测试 Emby 服务器连通性与容量大盘\n"
                "/help - 获取本帮助菜单")
         self.send_message(cid, msg.strip(), platform=platform)
 

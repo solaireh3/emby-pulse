@@ -7,13 +7,11 @@ from app.core.database import query_db, DB_PATH
 
 logger = logging.getLogger("uvicorn")
 
-# 修复路由结尾斜杠的问题，兼容各种 Nginx 反代环境
 router = APIRouter(prefix="/api/notifications", tags=["系统通知"])
 
 class MarkReadReq(BaseModel):
     id: Optional[int] = None
 
-# 暴力兜底建表：防止 init_db 没有成功运行或被旧版 Docker 缓存覆盖
 def ensure_table_exists():
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -32,15 +30,13 @@ def ensure_table_exists():
     except Exception as e:
         logger.error(f"[通知中心] 自动建表失败: {e}")
 
-# 同时匹配有无斜杠的请求
 @router.get("")
 @router.get("/")
 async def get_notifications(limit: int = 10):
-    ensure_table_exists()  # 每次拉取前检查一下表，防止丢失
+    ensure_table_exists()
     try:
         count_res = query_db("SELECT COUNT(*) as c FROM sys_notifications WHERE is_read = 0")
         if count_res is None:
-            print("⚠️ [通知中心] 警告：读取数据库失败，可能是底层 SQL 报错！")
             unread_count = 0
         else:
             unread_count = count_res[0]['c']
@@ -79,7 +75,19 @@ async def mark_as_read(req: MarkReadReq):
     except Exception as e:
         return {"success": False, "msg": str(e)}
 
-# 👇 终极测试接口：直接访问这个地址，测试整条链路是否畅通！
+# 🔥 新增：一键清空数据库中的所有通知记录
+@router.delete("/clear")
+async def clear_notifications():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM sys_notifications")
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "msg": str(e)}
+
 @router.get("/test_push")
 async def test_push_notification():
     ensure_table_exists()
@@ -91,6 +99,6 @@ async def test_push_notification():
             message="如果你看到了这条消息，说明从写入到读取的链路已经完全打通！",
             action_url="/"
         )
-        return {"success": True, "msg": "测试通知已注入！请返回控制台刷新页面，看右上角铃铛是否亮起！"}
+        return {"success": True, "msg": "测试通知已注入！"}
     except Exception as e:
         return {"success": False, "msg": f"注入失败: {str(e)}"}

@@ -163,6 +163,7 @@
                         <i class="fa-solid fa-moon text-lg dark:hidden"></i>
                         <i class="fa-solid fa-sun text-lg hidden dark:block text-yellow-400"></i>
                     </button>
+                    
                     <div id="global-live-panel" class="absolute top-[110%] right-0 md:right-12 mt-2 w-[280px] sm:w-[340px] bg-white/70 dark:bg-apple-cardDark/70 apple-blur rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)] border border-white/60 dark:border-white/10 overflow-hidden z-[100] transform scale-95 opacity-0 hidden transition-all duration-200 origin-top-right">
                         <div class="px-4 py-3 border-b border-gray-100/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-black/10">
                             <h4 class="font-bold text-[13px] flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-2 animate-pulse"></span>正在热播</h4>
@@ -173,15 +174,19 @@
                         </div>
                     </div>
 
-                    <div id="notify-panel" class="absolute top-[110%] right-0 md:right-2 mt-2 w-[320px] bg-white/70 dark:bg-apple-cardDark/70 apple-blur rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)] border border-white/60 dark:border-white/10 overflow-hidden z-[100] transform scale-95 opacity-0 hidden transition-all duration-200 origin-top-right">
-                        <div class="px-4 py-3 border-b border-gray-100/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-black/10">
+                    <div id="notify-panel" class="absolute top-[110%] right-0 md:right-2 mt-2 w-[320px] bg-white/70 dark:bg-apple-cardDark/70 apple-blur rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)] border border-white/60 dark:border-white/10 overflow-hidden z-[100] transform scale-95 opacity-0 hidden transition-all duration-200 origin-top-right flex flex-col">
+                        <div class="px-4 py-3 border-b border-gray-100/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-black/10 shrink-0">
                             <h3 class="font-bold text-[13px]">系统通知</h3>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-3">
                                 <span id="notify-count-text" class="text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 px-2 py-0.5 rounded-full hidden">0</span>
-                                <button onclick="markAllAsRead()" class="text-[11px] text-brand-500 hover:text-brand-600 dark:text-brand-400 transition-colors">全部已读</button>
+                                <button onclick="markAllAsRead()" title="全部已读" class="text-[14px] text-gray-400 hover:text-brand-500 transition-colors"><i class="fa-solid fa-check-double"></i></button>
+                                <button onclick="clearAllNotifications()" title="清空全部" class="text-[14px] text-gray-400 hover:text-red-500 transition-colors"><i class="fa-regular fa-trash-can"></i></button>
                             </div>
                         </div>
-                        <div id="notify-list" class="max-h-[50vh] overflow-y-auto mac-scrollbar p-2 flex flex-col gap-1"></div>
+                        <div id="notify-list" class="max-h-[45vh] overflow-y-auto mac-scrollbar p-2 flex flex-col gap-1 flex-1"></div>
+                        <div class="p-2 border-t border-gray-100/50 dark:border-white/5 bg-gray-50/50 dark:bg-black/20 shrink-0">
+                            <button onclick="openHistoryModal()" class="w-full py-2 text-[12px] font-medium text-gray-500 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors rounded-lg hover:bg-white dark:hover:bg-white/5"><i class="fa-solid fa-clock-rotate-left mr-1"></i> 查看历史所有通知</button>
+                        </div>
                     </div>
 
                 </div>
@@ -200,7 +205,6 @@
             <button onclick="toggleBottomSheet()" class="flex flex-col items-center justify-center flex-1 py-1.5 text-gray-500 dark:text-gray-400 transition-colors"><i class="fa-solid fa-bars text-[17px] mb-0.5"></i><span class="text-[10px] font-medium">菜单</span></button>
         </div>
     </div>
-
     <div id="bottom-sheet-overlay" onclick="toggleBottomSheet()" class="fixed inset-0 bg-black/40 z-[60] hidden backdrop-blur-sm transition-opacity opacity-0 md:hidden"></div>
     <div id="bottom-sheet" class="fixed inset-x-0 bottom-0 z-[70] bg-apple-bgLight/80 dark:bg-apple-bgDark/80 apple-blur rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.15)] transform translate-y-full transition-transform duration-400 ease-out border-t border-white/50 dark:border-white/10 md:hidden pb-10 flex flex-col max-h-[85vh]">
         <div class="flex justify-center pt-4 pb-3 shrink-0"><div class="w-10 h-1.5 bg-gray-400/50 dark:bg-gray-600/50 rounded-full"></div></div><div class="px-5 py-2 overflow-y-auto mac-scrollbar space-y-5 flex-1" id="sheet-scroll-content">
@@ -233,6 +237,22 @@
     </div>
 
     <div id="global-toast-container" class="fixed top-20 right-2 md:top-auto md:bottom-6 md:right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+
+    <div id="notify-history-modal" class="fixed inset-0 z-[110] hidden opacity-0 transition-opacity duration-200">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeHistoryModal()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-2xl bg-white dark:bg-apple-cardDark rounded-[24px] shadow-2xl border border-gray-200 dark:border-white/5 overflow-hidden flex flex-col transform scale-95 transition-transform duration-200 max-h-[85vh] h-[600px]" id="notify-history-container">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-black/20 shrink-0">
+                <h3 class="font-bold text-[16px] flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-brand-500"></i> 历史通知库</h3>
+                <div class="flex items-center gap-5">
+                    <button onclick="clearAllNotifications()" class="text-[13px] text-red-500 hover:text-red-600 transition-colors font-medium flex items-center gap-1.5"><i class="fa-regular fa-trash-can"></i> 一键清空</button>
+                    <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors bg-gray-100 dark:bg-white/5 w-8 h-8 rounded-full flex justify-center items-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+            </div>
+            <div id="notify-history-list" class="overflow-y-auto mac-scrollbar p-3 flex-1 flex flex-col gap-2 bg-gray-50/30 dark:bg-black/5">
+                <div class="text-center py-20 text-gray-400 text-sm">正在加载中...</div>
+            </div>
+        </div>
+    </div>
 
     <div id="ep-global-search" class="fixed inset-0 z-[100] hidden opacity-0 transition-opacity duration-200">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeGlobalSearch()"></div>
@@ -287,7 +307,6 @@
                     badge.classList.remove('hidden');
                     statusText.innerText = `${json.data.length} 设备在线`;
                     let html = '';
-
                     const formatTicks = (ticks) => {
                         if (!ticks) return '00:00';
                         let totalSeconds = Math.floor(ticks / 10000000);
@@ -297,11 +316,9 @@
                         if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                     };
-
                     json.data.forEach(s => {
                         const item = s.NowPlayingItem || {};
                         const playState = s.PlayState || {};
-
                         const imgTargetId = item.PrimaryImageItemId || item.SeriesId || item.ParentId || s.ItemId || item.Id;
                         const jumpId = item.Id || s.ItemId;
                         const rawTitle = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : (item.Name || '未知内容');
@@ -314,7 +331,6 @@
                             currentStr = formatTicks(playState.PositionTicks);
                             totalStr = formatTicks(item.RunTimeTicks);
                         }
-
                         html += `
                             <div onclick="if(globalEmbyBaseUrl) window.open('${globalEmbyBaseUrl}/web/index.html#!/item?id=${jumpId}&serverId=${globalEmbyServerId}')" class="flex gap-3 p-3 hover:bg-gray-50/50 dark:hover:bg-white/5 rounded-xl transition-colors cursor-pointer group">
                                 <div class="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-800 relative shadow-sm border border-gray-200/50 dark:border-white/5">
@@ -344,7 +360,7 @@
         }
 
         // ==========================================
-        // 🔥 全新升级：全局通知中心前端逻辑
+        // 🔥 通知中心逻辑 (支持清空、历史面板)
         // ==========================================
         let lastNotifyIds = []; 
         let isNotifyPanelOpen = false;
@@ -406,13 +422,12 @@
             let newIds = [];
             
             if (!items || items.length === 0) { 
-                html = '<div class="text-center py-10 text-gray-400 text-xs font-medium">📭 暂无新通知</div>'; 
+                html = '<div class="text-center py-10 text-gray-400 text-xs font-medium">📭 暂无通知，一切安好</div>'; 
             } else { 
                 items.forEach(item => { 
                     newIds.push(item.id); 
-                    
                     const isUnread = item.is_read === 0;
-                    const bgClass = isUnread ? 'bg-gray-50/80 dark:bg-white/5' : 'hover:bg-gray-50/50 dark:hover:bg-white/5';
+                    const bgClass = isUnread ? 'bg-gray-50/80 dark:bg-white/5' : 'hover:bg-gray-50/50 dark:hover:bg-white/5 opacity-75';
                     const dot = isUnread ? '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2 shrink-0"></span>' : '';
                     
                     let iconHtml = '<i class="fa-solid fa-bell text-gray-400 dark:text-gray-300"></i>';
@@ -497,6 +512,81 @@
             }).then(() => fetchNotifications());
         }
 
+        function clearAllNotifications() {
+            if(!confirm("⚠️ 确定要清空所有系统通知吗？此操作不可恢复。")) return;
+            fetch('/api/notifications/clear', { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        fetchNotifications();
+                        if(!document.getElementById('notify-history-modal').classList.contains('hidden')) {
+                            fetchHistoryNotifications();
+                        }
+                    }
+                });
+        }
+
+        // 🔥 新增：历史通知面板逻辑
+        function openHistoryModal() {
+            if(isNotifyPanelOpen) toggleNotifyDropdown(); 
+            const modal = document.getElementById('notify-history-modal');
+            const container = document.getElementById('notify-history-container');
+            modal.classList.remove('hidden');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            container.classList.remove('scale-95');
+            fetchHistoryNotifications();
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById('notify-history-modal');
+            const container = document.getElementById('notify-history-container');
+            modal.classList.add('opacity-0');
+            container.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        function fetchHistoryNotifications() {
+            // 拉取最近的 100 条通知作为历史展示
+            fetch('/api/notifications?limit=100') 
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('notify-history-list');
+                    if (data.success && data.items.length > 0) {
+                        let html = '';
+                        data.items.forEach(item => {
+                            const isUnread = item.is_read === 0;
+                            const bgClass = isUnread ? 'bg-white dark:bg-apple-cardDark shadow-sm' : 'hover:bg-gray-50/80 dark:hover:bg-white/5 opacity-80';
+                            const dot = isUnread ? '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2 shrink-0"></span>' : '';
+                            
+                            let iconHtml = '<i class="fa-solid fa-bell text-gray-400 dark:text-gray-300"></i>';
+                            let iconBg = 'bg-gray-100 dark:bg-gray-800';
+                            if (item.type === 'risk') { iconHtml = '<i class="fa-solid fa-shield-halved text-red-500"></i>'; iconBg = 'bg-red-50 dark:bg-red-500/10'; }
+                            else if (item.type === 'request') { iconHtml = '<i class="fa-solid fa-clapperboard text-brand-500"></i>'; iconBg = 'bg-brand-50 dark:bg-brand-500/10'; }
+                            else if (item.type === 'system') { iconHtml = '<i class="fa-solid fa-gear text-indigo-500"></i>'; iconBg = 'bg-indigo-50 dark:bg-indigo-500/10'; }
+
+                            html += `
+                            <div class="flex gap-4 p-4 rounded-[16px] transition cursor-default border border-transparent dark:border-white/5 ${bgClass}">
+                                <div class="w-12 h-12 rounded-full ${iconBg} flex justify-center items-center shrink-0">
+                                    ${iconHtml}
+                                </div>
+                                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                    <div class="text-[14px] font-bold text-gray-800 dark:text-gray-200 flex items-center">${dot}${item.title}</div>
+                                    <div class="text-[12px] text-gray-500 mt-1">${item.message}</div>
+                                </div>
+                                <div class="flex flex-col items-end justify-between shrink-0 pl-4">
+                                    <div class="text-[11px] font-mono text-gray-400 mb-2">${item.created_at}</div>
+                                    ${item.action_url ? `<a href="${item.action_url}" class="text-[11px] text-brand-500 hover:text-brand-600 font-medium bg-brand-50 hover:bg-brand-100 dark:bg-brand-500/10 dark:hover:bg-brand-500/20 px-3 py-1.5 rounded-lg transition-colors">立即处理</a>` : ''}
+                                </div>
+                            </div>`;
+                        });
+                        list.innerHTML = html;
+                    } else {
+                        list.innerHTML = '<div class="text-center py-20 text-gray-400 text-sm"><i class="fa-regular fa-folder-open text-4xl mb-3 block opacity-20"></i>暂无历史记录</div>';
+                    }
+                });
+        }
+
         document.addEventListener('DOMContentLoaded', () => { 
             setTimeout(fetchNotifications, 1000); 
             setInterval(fetchNotifications, 30000); 
@@ -504,7 +594,7 @@
             setInterval(fetchGlobalLive, 10000); 
         });
         
-        /* 全局搜索与防溢出简介 */
+        /* 全局搜索代码保留不变 */
         const searchModal = document.getElementById('ep-global-search'); const searchContainer = document.getElementById('ep-search-container'); const searchInput = document.getElementById('ep-search-input'); const searchResults = document.getElementById('ep-search-results'); const searchLoading = document.getElementById('ep-search-loading'); const searchEmpty = document.getElementById('ep-search-empty'); let searchTimeout = null;
         function openGlobalSearch() { searchModal.classList.remove('hidden'); void searchModal.offsetWidth; searchModal.classList.remove('opacity-0'); searchContainer.classList.remove('scale-95'); searchInput.value = ''; searchResults.innerHTML = ''; searchResults.appendChild(searchEmpty); searchEmpty.style.display = 'block'; setTimeout(() => searchInput.focus(), 100); }
         function closeGlobalSearch() { searchModal.classList.add('opacity-0'); searchContainer.classList.add('scale-95'); setTimeout(() => { searchModal.classList.add('hidden'); searchInput.blur(); }, 200); }
@@ -526,20 +616,17 @@
             searchResults.innerHTML = html;
         }
 
-        /* ===== 移动端底栏自定义 ===== */
+        /* 移动端底栏自定义代码保留不变 */
         const NAV_MAP = { 'requests_admin': { icon: 'fa-clapperboard', text: '工单', url: '/requests_admin' }, 'users': { icon: 'fa-users-gear', text: '用户', url: '/users_manage' }, 'details': { icon: 'fa-magnifying-glass-chart', text: '洞察', url: '/details' }, 'insight': { icon: 'fa-chart-pie', text: '全景', url: '/insight' }, 'gaps': { icon: 'fa-puzzle-piece', text: '缺集', url: '/gaps' }, 'content': { icon: 'fa-film', text: '排行', url: '/content' }, 'history': { icon: 'fa-clock-rotate-left', text: '历史', url: '/history' }, 'calendar': { icon: 'fa-calendar-days', text: '日历', url: '/calendar' }, 'bot': { icon: 'fa-robot', text: '机器', url: '/bot' }, 'clients': { icon: 'fa-desktop', text: '管控', url: '/clients' }, 'risk': { icon: 'fa-shield-halved', text: '风控', url: '/risk' }, 'report': { icon: 'fa-wand-magic-sparkles', text: '工坊', url: '/report' }, 'tasks': { icon: 'fa-bolt', text: '任务', url: '/tasks' }, 'settings': { icon: 'fa-gear', text: '设置', url: '/settings' }, 'about': { icon: 'fa-circle-info', text: '关于', url: '/about' } };
-        
         function renderMobileDynamicNav() {
             if(window.innerWidth > 768) return; 
             const savedNavs = JSON.parse(localStorage.getItem('ep_mobile_nav') || '["requests_admin", "users"]');
             const container = document.getElementById('mobile-dynamic-nav-container'); if(!container) return;
             const activePath = window.location.pathname; let html = '';
-            
             savedNavs.forEach(key => { 
                 const item = NAV_MAP[key] || NAV_MAP['requests_admin']; 
                 const isActive = activePath.includes(item.url) ? 'text-brand-500' : 'text-gray-500 dark:text-gray-400'; 
                 const badgeHtml = key === 'requests_admin' ? `<span id="notify-badge-mobile" class="hidden absolute top-1 right-1/4 h-2 w-2 bg-red-500 rounded-full border border-white dark:border-apple-cardDark animate-pulse"></span>` : ''; 
-                
                 html += `<a href="${item.url}" class="flex flex-col items-center justify-center flex-1 py-1.5 transition-colors relative ${isActive}"><i class="fa-solid ${item.icon} text-[17px] mb-0.5"></i><span class="text-[10px] font-medium">${item.text}</span>${badgeHtml}</a>`; 
             });
             container.innerHTML = html; 
@@ -558,7 +645,7 @@
             
             const modalHtml = `<div id="nav-config-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300 px-4"><div class="bg-apple-bgLight dark:bg-apple-cardDark w-full max-w-sm rounded-[28px] shadow-2xl p-6 transform scale-95 transition-transform duration-300 border border-white/50 dark:border-white/5"><div class="text-center mb-6"><h3 class="text-lg font-bold text-gray-900 dark:text-white">自定义底部导航</h3><p class="text-xs text-gray-500 mt-1">请选择 2 个最常用的功能</p></div><div class="space-y-4"><div><label class="text-[11px] font-bold text-gray-500 ml-1">左侧快捷按键</label><select id="nav-select-1" class="w-full mt-1.5 bg-white dark:bg-[#2C2C2E] text-gray-800 dark:text-gray-200 p-3 rounded-xl border-none focus:ring-2 focus:ring-brand-500 text-[13px] font-medium outline-none shadow-sm"></select></div><div><label class="text-[11px] font-bold text-gray-500 ml-1">右侧快捷按键</label><select id="nav-select-2" class="w-full mt-1.5 bg-white dark:bg-[#2C2C2E] text-gray-800 dark:text-gray-200 p-3 rounded-xl border-none focus:ring-2 focus:ring-brand-500 text-[13px] font-medium outline-none shadow-sm"></select></div></div><div class="flex gap-3 mt-8"><button onclick="closeNavConfigModal()" class="flex-1 py-3 bg-white dark:bg-[#2C2C2E] text-gray-600 dark:text-gray-300 rounded-[14px] font-bold text-[13px] transition-colors shadow-sm">取消</button><button onclick="saveNavConfig()" class="flex-1 py-3 bg-brand-500 text-white rounded-[14px] font-bold text-[13px] shadow-md transition-colors active:scale-95">保存配置</button></div></div></div>`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-
+            
             const sidebarNav = document.getElementById('sidebar-nav');
             if (sidebarNav) {
                 const activeLink = sidebarNav.querySelector('.text-brand-500');

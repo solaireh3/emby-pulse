@@ -51,14 +51,12 @@ def init_dedupe_db():
             is_exempt INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
-        # 白名单表增加了 title 字段方便展示
         c.execute('''CREATE TABLE IF NOT EXISTS dedupe_whitelist (
             group_key TEXT PRIMARY KEY,
             title TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
         
-        # 字段热更新兼容
         c.execute("PRAGMA table_info(dedupe_results)")
         cols = [col[1] for col in c.fetchall()]
         if "file_path" not in cols: c.execute("ALTER TABLE dedupe_results ADD COLUMN file_path TEXT")
@@ -86,7 +84,6 @@ def calculate_score(src: dict, strategy: str = "quality", custom_weights: dict =
     elif strategy == "custom" and custom_weights: w = custom_weights
 
     width = video.get("Width", 0)
-    # 🔥 修复 1: 规范化分辨率名称
     res_str = "未知"
     if width >= 3800: score += w.get("res", 40); res_str = "4K"
     elif width >= 1900: score += w.get("res", 40) // 2; res_str = "1080P"
@@ -146,7 +143,8 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
         items = []; start = 0; limit = 10000
         while True:
             url = f"{host}/emby/Users/{admin_id}/Items"
-            params = { "IncludeItemTypes": "Movie,Episode", "Recursive": "true", "Fields": "ProviderIds,ParentIndexNumber,IndexNumber,IndexNumberEnd", "StartIndex": start, "Limit": limit, "api_key": key }
+            # 🔥 修复 2: 必须引入 SeriesId，抛弃残缺的 TmdbId 关联电视剧单集
+            params = { "IncludeItemTypes": "Movie,Episode", "Recursive": "true", "Fields": "ProviderIds,ParentIndexNumber,IndexNumber,IndexNumberEnd,SeriesId", "StartIndex": start, "Limit": limit, "api_key": key }
             chunk = requests.get(url, params=params, timeout=30).json().get("Items", [])
             items.extend(chunk)
             if len(chunk) < limit: break
@@ -159,11 +157,18 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
         whitelist = [r['group_key'] for r in query_db("SELECT group_key FROM dedupe_whitelist")]
         groups = defaultdict(list)
         for i in items:
-            tmdb = i.get("ProviderIds", {}).get("Tmdb")
-            if not tmdb: continue
             mtype = i.get("Type")
-            if mtype == "Movie": g_key = f"movie_{tmdb}"
-            else: g_key = f"tv_{tmdb}_s{i.get('ParentIndexNumber', 0)}e{i.get('IndexNumber', 0)}"
+            if mtype == "Movie":
+                tmdb = i.get("ProviderIds", {}).get("Tmdb")
+                if not tmdb: continue
+                g_key = f"movie_{tmdb}"
+            elif mtype == "Episode":
+                # 🔥 修复 2: 电视剧单集通过原生 SeriesId 进行绝对聚合
+                series_id = i.get("SeriesId")
+                if not series_id: continue
+                g_key = f"tv_{series_id}_s{i.get('ParentIndexNumber', 0)}e{i.get('IndexNumber', 0)}"
+            else: continue
+            
             if g_key not in whitelist: groups[g_key].append(i)
                 
         dup_groups = {k: v for k, v in groups.items() if len(v) > 1}
@@ -193,7 +198,7 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
                 file_name = full_path.split("/")[-1].split("\\")[-1] if full_path else d.get("Name", "未知文件")
                 
                 parsed_items.append({
-                    "g_key": g_key, "tmdb": d.get("ProviderIds", {}).get("Tmdb"),
+                    "g_key": g_key, "tmdb": d.get("ProviderIds", {}).get("Tmdb") or d.get("SeriesId", ""),
                     "mtype": d.get("Type"), "title": d.get("SeriesName") or d.get("Name", ""),
                     "season": d.get("ParentIndexNumber", 0), "episode": d.get("IndexNumber", 0),
                     "item_id": d["Id"], "file_name": file_name, "file_path": full_path,
@@ -224,7 +229,7 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
             
         conn.close()
         elapsed = time.time() - start_time
-        logger.info(f"✅ [去重引擎] 扫描完成！共遍历 {scan_state['total_items']} 个资源，耗时: {elapsed:.2f} 秒。")
+        logger.info(f"✅ [去重引擎] 扫描完成！共遍历 {scan_state['total_items']} 个资源，发现 {scan_state['duplicate_groups']} 组重复。耗时: {elapsed:.2f} 秒。")
         scan_state["message"] = f"✅ 扫描完成！遍历 {scan_state['total_items']} 项，耗时 {int(elapsed)}s"
         
     except Exception as e:
@@ -270,7 +275,7 @@ async def get_results():
     if rows:
         for r in rows: result_tree[r["group_key"]].append(dict(r))
         
-    # 🔥 获取准确的 Emby 外部地址，供前端跳转使用
+    # 🔥 修复 1: 获取真实的 Emby 公网地址供拼接使用
     base_url = cfg.get("emby_public_url") or cfg.get("emby_host") or ""
     if base_url.endswith('/'): base_url = base_url[:-1]
     

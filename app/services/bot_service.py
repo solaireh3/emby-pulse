@@ -16,7 +16,6 @@ from app.core.event_bus import bus
 
 logger = logging.getLogger("uvicorn")
 
-# 🔥 修复 1: 将获取管理员 ID 的方法提取为全局公用函数，解决跨类调用引发的 AttributeError
 def get_admin_id():
     key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
     if not key or not host: return None
@@ -421,19 +420,28 @@ class NotificationBot:
         wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
         self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
 
+    # 🔥 修复进度条格式化算法，防止 ticks 传入异常格式导致崩溃变 00:00:00
     def _format_ticks(self, ticks):
         if not ticks: return "00:00:00"
-        total_seconds = int(ticks / 10000000)
-        h = total_seconds // 3600
-        m = (total_seconds % 3600) // 60
-        s = total_seconds % 60
-        return f"{h:02}:{m:02}:{s:02}"
+        try:
+            total_seconds = int(int(ticks) / 10000000)
+            h = total_seconds // 3600
+            m = (total_seconds % 3600) // 60
+            s = total_seconds % 60
+            return f"{h:02}:{m:02}:{s:02}"
+        except:
+            return "00:00:00"
 
     def on_playback_event(self, data, action):
         if not cfg.get("enable_notify"): return
         try:
-            user = data.get("User", {}); item = data.get("Item", {}); session = data.get("Session", {})
-            title = item.get("Name", "未知内容")
+            # 兼容 Emby Webhook Plugin 与原生 Webhook
+            session = data.get("Session") or data
+            item = data.get("Item") or session.get("NowPlayingItem") or {}
+            user = data.get("User") or session
+            
+            user_name = user.get("Name") or user.get("UserName") or "未知用户"
+            title = item.get("Name") or "未知内容"
             ep_info = ""; raw_type = item.get("Type", "")
             type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
             type_cn = type_map.get(raw_type, "媒体")
@@ -447,19 +455,36 @@ class NotificationBot:
                 title = f"{title} - {artist_str}"
             
             emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
-            ip = session.get("RemoteEndPoint", "127.0.0.1"); loc = self._get_location(ip)
+            ip = session.get("RemoteEndPoint") or data.get("RemoteEndPoint") or "127.0.0.1"
+            loc = self._get_location(ip)
             
-            pos_ticks = session.get("PlayState", {}).get("PositionTicks", 0)
-            run_ticks = item.get("RunTimeTicks", 1) or 1
+            # 🔥 多维度抓取进度，防止某个对象为空导致进度全变 00:00:00
+            play_state = session.get("PlayState", {})
+            playback_info = data.get("PlaybackInfo", {})
+            
+            pos_ticks = data.get("PositionTicks") or playback_info.get("PositionTicks") or play_state.get("PositionTicks") or 0
+            run_ticks = item.get("RunTimeTicks") or session.get("NowPlayingItem", {}).get("RunTimeTicks") or data.get("RunTimeTicks") or 1
+            
+            try: pos_ticks = int(pos_ticks)
+            except: pos_ticks = 0
+            try: run_ticks = int(run_ticks)
+            except: run_ticks = 1
+            
+            if run_ticks <= 0: run_ticks = 1
+
             pct = int((pos_ticks / run_ticks) * 100) if run_ticks > 1 else 0
             pct = min(max(pct, 0), 100)
+            
             pos_str = self._format_ticks(pos_ticks)
             run_str = self._format_ticks(run_ticks)
 
-            msg = (f"{emoji} <b>【{user.get('Name')}】{act} {type_cn} {title}</b>{ep_info}\n\n"
+            client = session.get("Client") or data.get("Client") or "未知端"
+            device = session.get("DeviceName") or data.get("DeviceName") or "未知设备"
+
+            msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
                    f"⏱️ <b>进度</b>：<code>{pos_str} / {run_str} ({pct}%)</code>\n"
                    f"🌐 <b>地址</b>：{ip} ({loc})\n"
-                   f"📱 <b>设备</b>：{session.get('Client')} on {session.get('DeviceName')}\n"
+                   f"📱 <b>设备</b>：{client} on {device}\n"
                    f"🕒 <b>时间</b>：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
             target_id = item.get("Id")
@@ -467,8 +492,8 @@ class NotificationBot:
             elif raw_type == "Audio" and item.get("AlbumId"): target_id = item.get("AlbumId")
             
             base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
-            if base_url.endswith('/'): base_url = base_url[:-1]
-            play_url = f"{base_url}/web/index.html#!/item?id={target_id}&serverId={item.get('ServerId','')}"
+            if base_url and base_url.endswith('/'): base_url = base_url[:-1]
+            play_url = f"{base_url}/web/index.html#!/item?id={target_id}&serverId={item.get('ServerId','')}" if base_url else "#"
             keyboard = {"inline_keyboard": [[{"text": "🔗 跳转详情", "url": play_url}]]}
 
             primary_io = self._download_emby_image(target_id, 'Primary') 
@@ -480,7 +505,8 @@ class NotificationBot:
             tg_img = primary_io or backdrop_io or REPORT_COVER_URL
             wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
             self.send_photo("sys_notify", tg_img, msg, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
-        except Exception as e: pass
+        except Exception as e: 
+            logger.error(f"[Bot] Playback event error: {e}")
 
     def on_user_login(self, data):
         if not cfg.get("notify_user_login"): return
@@ -708,17 +734,15 @@ class NotificationBot:
                     if "text" in btn and "url" in btn: text += f"🔗 {btn['text']}: {btn['url']}\n"
         return text.strip()
 
-    # 🔥 修复 2: 企微三栏菜单重构，增加详细错误日志拆解黑盒
     def _set_wecom_menu(self):
         token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
         if not token or not agentid: return
         
-        # 🔥 修复：去掉主菜单的 Emoji，符合企微极其严苛的 16 字节限制
         menu_data = {
             "button": [
                 {
-                    "name": "数据大盘",  # 4个汉字=12字节 (≤16字节)
+                    "name": "数据大盘",
                     "sub_button": [
                         {"type": "click", "name": "📈 今日日报", "key": "/stats"},
                         {"type": "click", "name": "📅 本周周报", "key": "/weekly"},
@@ -748,7 +772,7 @@ class NotificationBot:
             res = requests.post(f"{proxy_url}/cgi-bin/menu/create?access_token={token}&agentid={agentid}", json=menu_data, timeout=5)
             res_data = res.json()
             if res_data.get("errcode") == 0:
-                logger.info("✅ [企微助手] 底部三栏菜单推送成功！(若手机端未更新，请取消关注重新进入即可)")
+                logger.info("✅ [企微助手] 底部三栏菜单推送成功！")
             else:
                 logger.error(f"❌ [企微助手] 菜单推送失败！错误码: {res_data.get('errcode')}, 详情: {res_data.get('errmsg')}")
         except Exception as e: 

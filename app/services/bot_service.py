@@ -470,18 +470,16 @@ class NotificationBot:
 
             target_id = item.get("Id")
             
-            # 🔥 逆向反查补全：如果 Webhook 给的是“阉割版”数据，主动去 Emby 把时长和进度抓回来！
+            # 逆向反查补全 (防止部分三方播放器不上报时长)
             if target_id and (run_ticks <= 0 or pos_ticks <= 0):
                 try:
                     host = cfg.get("emby_host")
                     key = cfg.get("emby_api_key")
                     
-                    # 补全总时长
                     if run_ticks <= 0:
                         detail_res = requests.get(f"{host}/emby/Items/{target_id}?api_key={key}", timeout=2).json()
                         run_ticks = int(detail_res.get("RunTimeTicks") or 0)
                         
-                    # 补全当前进度 (仅针对活跃 Session)
                     if pos_ticks <= 0 and session.get("Id"):
                         sess_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=2).json()
                         for s in sess_res:
@@ -491,19 +489,21 @@ class NotificationBot:
                 except:
                     pass
             
-            if run_ticks <= 0: run_ticks = 1 # 最终兜底，防止除以0报错
-
-            pct = int((pos_ticks / run_ticks) * 100) if run_ticks > 1 else 0
-            pct = min(max(pct, 0), 100)
-            
-            pos_str = self._format_ticks(pos_ticks)
-            run_str = self._format_ticks(run_ticks)
+            # 🔥 进度条柔性降级处理：不显示 00:00:00
+            if run_ticks <= 1:
+                progress_html = f"⏱️ <b>进度</b>：🟢 实时流/未知总时长"
+            else:
+                pct = int((pos_ticks / run_ticks) * 100)
+                pct = min(max(pct, 0), 100)
+                pos_str = self._format_ticks(pos_ticks)
+                run_str = self._format_ticks(run_ticks)
+                progress_html = f"⏱️ <b>进度</b>：<code>{pos_str} / {run_str} ({pct}%)</code>"
 
             client = session.get("Client") or data.get("Client") or "未知端"
             device = session.get("DeviceName") or data.get("DeviceName") or "未知设备"
 
             msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
-                   f"⏱️ <b>进度</b>：<code>{pos_str} / {run_str} ({pct}%)</code>\n"
+                   f"{progress_html}\n"
                    f"🌐 <b>地址</b>：{ip} ({loc})\n"
                    f"📱 <b>设备</b>：{client} on {device}\n"
                    f"🕒 <b>时间</b>：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -663,12 +663,13 @@ class NotificationBot:
             return ip
         except: return ip
 
-    # 🔥 核心修复：IP 破折号与标点符号清理
+    # 🔥 核心修复：斩草除根的正则净化大法！
     def _clean_location(self, loc):
         if not loc: return ""
         loc = re.sub(r'(中国|省|市|自治区|自治州|特别行政区|移动|联通|电信|铁通|教育网|广电|通信|数据中心|IDC)', ' ', loc)
-        # 将横杠、下划线、逗号全部替换为空格
-        loc = re.sub(r'[-_、,，]', ' ', loc)
+        # 直接使用排除法：将所有非汉字、非字母、非数字的异形符号（包含全角横杠、破折号）全部干掉！
+        loc = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]', ' ', loc)
+        # 合并多个空格，并去除首尾空格
         loc = re.sub(r'\s+', ' ', loc).strip() 
         return loc
 

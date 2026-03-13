@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request, Response, UploadFile, File, Form
 from pydantic import BaseModel
-from app.schemas.models import UserUpdateModel, NewUserModel, InviteGenModel, BatchActionModel
+from typing import Optional, List
+# 仅保留无需修改的 Model
+from app.schemas.models import InviteGenModel, BatchActionModel
 from app.core.config import cfg
 from app.core.database import query_db
 from app.core.media_adapter import media_api
@@ -8,8 +10,50 @@ import requests
 import datetime
 import secrets
 import base64
+import logging
 
 router = APIRouter()
+
+# ==========================================
+# 🔥 核心修复 1: 自动无损升级数据库，确保有 remark 字段
+# ==========================================
+try:
+    query_db("ALTER TABLE users_meta ADD COLUMN remark TEXT DEFAULT ''")
+    logging.getLogger("uvicorn").info("✅ 数据库无损升级：已成功添加用户备注(remark)字段")
+except Exception:
+    # 如果字段已存在，会抛出异常，这里直接忽略即可
+    pass
+
+# ==========================================
+# 🔥 核心修复 2: 重新定义数据接收模型，防止 422 验证报错拦截
+# ==========================================
+class UserUpdateModelEx(BaseModel):
+    user_id: str
+    is_disabled: bool = False
+    expire_date: Optional[str] = None
+    password: Optional[str] = None
+    enable_all_folders: bool = True
+    enabled_folders: list[str] = []
+    excluded_sub_folders: list[str] = []
+    enable_downloading: bool = True
+    enable_video_transcoding: bool = True
+    enable_audio_transcoding: bool = True
+    max_parental_rating: Optional[int] = None
+    max_concurrent: Optional[int] = None
+    is_vip: bool = False
+    remark: Optional[str] = ""  # 接收前端传来的备注
+
+class NewUserModelEx(BaseModel):
+    name: str
+    password: Optional[str] = None
+    expire_date: Optional[str] = None
+    template_user_id: Optional[str] = None
+    copy_library: bool = True
+    copy_policy: bool = True
+    copy_parental: bool = True
+    max_concurrent: Optional[int] = None
+    is_vip: bool = False
+    remark: Optional[str] = ""  # 接收前端传来的备注
 
 class InviteBatchModel(BaseModel):
     codes: list[str]
@@ -77,7 +121,8 @@ def api_manage_users(request: Request):
                 "EnableAudioTranscoding": policy.get('EnableAudioPlaybackTranscoding', True),
                 "MaxParentalRating": policy.get('MaxParentalRating'),
                 "MaxConcurrent": meta.get('max_concurrent'),
-                "IsVIP": bool(meta.get('is_vip', 0))  # 🔥 获取 VIP 状态
+                "IsVIP": bool(meta.get('is_vip', 0)),
+                "Remark": meta.get('remark', '')  # 🔥 核心修改：下发备注供前端列表展示
             })
         return {"status": "success", "data": final_list, "emby_url": public_host}
     except Exception as e: return {"status": "error", "message": str(e)}
@@ -90,7 +135,7 @@ def api_get_single_user(user_id: str, request: Request):
         if res.status_code == 200:
             user_data = res.json()
             policy = user_data.get('Policy', {})
-            meta_row = query_db("SELECT max_concurrent, is_vip FROM users_meta WHERE user_id = ?", (user_id,), one=True)
+            meta_row = query_db("SELECT * FROM users_meta WHERE user_id = ?", (user_id,), one=True)
             
             return {
                 "status": "success", 
@@ -101,7 +146,8 @@ def api_get_single_user(user_id: str, request: Request):
                     "EnableVideoTranscoding": policy.get('EnableVideoPlaybackTranscoding', True), "EnableAudioTranscoding": policy.get('EnableAudioPlaybackTranscoding', True),
                     "MaxParentalRating": policy.get('MaxParentalRating'),
                     "MaxConcurrent": meta_row['max_concurrent'] if meta_row else None,
-                    "IsVIP": bool(meta_row['is_vip']) if meta_row and meta_row['is_vip'] else False # 🔥 下发给弹窗
+                    "IsVIP": bool(meta_row['is_vip']) if meta_row and meta_row['is_vip'] else False,
+                    "Remark": meta_row['remark'] if meta_row and 'remark' in meta_row.keys() else "" # 🔥 下发给编辑弹窗
                 }
             }
         return {"status": "error"}
@@ -168,18 +214,19 @@ def api_manage_invites_batch(data: InviteBatchModel, request: Request):
     except Exception as e: return {"status": "error", "message": str(e)}
 
 @router.post("/api/manage/user/update")
-def api_manage_user_update(data: UserUpdateModel, request: Request):
+def api_manage_user_update(data: UserUpdateModelEx, request: Request): # 🔥 替换为新的数据模型
     if not request.session.get("user"): return {"status": "error"}
     try:
         exist = query_db("SELECT * FROM users_meta WHERE user_id = ?", (data.user_id,), one=True)
         v_exp = data.expire_date if data.expire_date else None
         v_max = data.max_concurrent
-        v_vip = 1 if data.is_vip else 0  # 🔥 转化 VIP 布尔值为 1/0
+        v_vip = 1 if data.is_vip else 0
+        v_remark = data.remark if data.remark else "" # 🔥 提取备注
         
         if exist: 
-            query_db("UPDATE users_meta SET expire_date = ?, max_concurrent = ?, is_vip = ? WHERE user_id = ?", (v_exp, v_max, v_vip, data.user_id))
+            query_db("UPDATE users_meta SET expire_date = ?, max_concurrent = ?, is_vip = ?, remark = ? WHERE user_id = ?", (v_exp, v_max, v_vip, v_remark, data.user_id))
         else: 
-            query_db("INSERT INTO users_meta (user_id, expire_date, max_concurrent, is_vip, created_at) VALUES (?, ?, ?, ?, ?)", (data.user_id, v_exp, v_max, v_vip, datetime.datetime.now().isoformat()))
+            query_db("INSERT INTO users_meta (user_id, expire_date, max_concurrent, is_vip, remark, created_at) VALUES (?, ?, ?, ?, ?, ?)", (data.user_id, v_exp, v_max, v_vip, v_remark, datetime.datetime.now().isoformat()))
         
         if data.password:
             media_api.post(f"/Users/{data.user_id}/Password", json={"Id": data.user_id, "NewPw": data.password})
@@ -207,7 +254,7 @@ def api_manage_user_update(data: UserUpdateModel, request: Request):
     except Exception as e: return {"status": "error", "message": str(e)}
 
 @router.post("/api/manage/user/new")
-def api_manage_user_new(data: NewUserModel, request: Request):
+def api_manage_user_new(data: NewUserModelEx, request: Request): # 🔥 替换为新的数据模型
     if not request.session.get("user"): return {"status": "error"}
     try:
         res = media_api.post("/Users/New", json={"Name": data.name})
@@ -236,11 +283,12 @@ def api_manage_user_new(data: NewUserModel, request: Request):
         for k in ['BlockedMediaFolders','BlockedChannels','EnableAllChannels','EnabledChannels']: p.pop(k, None)
         media_api.post(f"/Users/{new_id}/Policy", json=p)
         
-        # 🔥 保存初始 VIP 和并发数据
+        # 🔥 保存初始 VIP、并发数据和备注
         v_exp = data.expire_date if data.expire_date else None
         v_max = data.max_concurrent
         v_vip = 1 if data.is_vip else 0
-        query_db("INSERT INTO users_meta (user_id, expire_date, max_concurrent, is_vip, created_at) VALUES (?, ?, ?, ?, ?)", (new_id, v_exp, v_max, v_vip, datetime.datetime.now().isoformat()))
+        v_remark = data.remark if data.remark else ""
+        query_db("INSERT INTO users_meta (user_id, expire_date, max_concurrent, is_vip, remark, created_at) VALUES (?, ?, ?, ?, ?, ?)", (new_id, v_exp, v_max, v_vip, v_remark, datetime.datetime.now().isoformat()))
         
         return {"status": "success", "message": "用户创建成功"}
     except Exception as e: return {"status": "error", "message": str(e)}

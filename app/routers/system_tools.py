@@ -1,6 +1,8 @@
 import time
 import requests
 import logging
+import sys
+import datetime
 from collections import deque
 from fastapi import APIRouter, Request
 from app.core.config import cfg
@@ -9,35 +11,72 @@ from app.core.database import query_db
 router = APIRouter(prefix="/api/system", tags=["System Tools"])
 
 # ==========================================
-# 🔥 核心黑科技：内存日志总线劫持器
-# 不管用户怎么部署(Docker/宝塔/nohup)，直接从内存抓取最新日志，无需生成实体 log 文件
+# 🔥 核心黑科技：全局底层流劫持器 (Stdout/Stderr Tee)
+# 抛弃原生 logging 拦截，直接在最底层劫持所有 print() 和系统输出
+# 保证你在网页端看到的日志，和 Docker 控制台 100% 绝对一致！
 # ==========================================
-class MemoryLogHandler(logging.Handler):
-    def __init__(self, capacity=300):
-        super().__init__()
-        self.logs = deque(maxlen=capacity)
-        # 设置极简纯粹的日志格式
-        self.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-        self.logs.append("[SYSTEM] 内存日志流嗅探器已挂载，等待捕获最新运行动态...")
 
-    def emit(self, record):
-        self.logs.append(self.format(record))
+# 初始化全局内存环形队列，最多保留 300 行防内存溢出
+if not hasattr(sys, '_emby_pulse_log_queue'):
+    sys._emby_pulse_log_queue = deque(maxlen=300)
+    sys._emby_pulse_log_queue.append(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [SYSTEM] 底层控制台流嗅探器已挂载，同步捕获全局 Print 与 Uvicorn 输出...")
 
-# 全局单例挂载 (防止热重载时重复创建)
-memory_handler = None
-for h in logging.getLogger().handlers:
-    if isinstance(h, MemoryLogHandler):
-        memory_handler = h
-        break
+class StreamTee:
+    def __init__(self, original_stream):
+        self.original_stream = original_stream
+        self.buffer = ""
 
-if not memory_handler:
-    memory_handler = MemoryLogHandler(capacity=300)
-    # 挂载到根节点和 uvicorn 节点
-    logging.getLogger().addHandler(memory_handler)
-    logging.getLogger("uvicorn").addHandler(memory_handler)
-    logging.getLogger("uvicorn.error").addHandler(memory_handler)
+    def write(self, data):
+        # 1. 保证原有的控制台/Docker正常输出
+        try:
+            self.original_stream.write(data)
+        except Exception:
+            pass
+            
+        # 2. 同步将输出数据劫持到我们的内存队列中
+        try:
+            self.buffer += data
+            if '\n' in self.buffer:
+                lines = self.buffer.split('\n')
+                # 只处理完整的行
+                for line in lines[:-1]:
+                    clean_line = line.strip()
+                    if clean_line:
+                        # 智能时间戳：如果原本的输出(如 print)没有时间戳，给它自动补上
+                        if not clean_line.startswith('['):
+                            ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            sys._emby_pulse_log_queue.append(f"[{ts}] {clean_line}")
+                        else:
+                            sys._emby_pulse_log_queue.append(clean_line)
+                
+                # 剩余未换行的部分放回 buffer 等待下一次拼接
+                self.buffer = lines[-1]
+        except Exception:
+            pass
+
+    def flush(self):
+        try:
+            self.original_stream.flush()
+        except Exception:
+            pass
+            
+    # 完美伪装成原生 stream，防止部分第三方库调用底层属性时报错
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
+# 动态替换标准输出流 (加上防重复挂载机制，完美适配热重载)
+if not getattr(sys.stdout, '_is_tee', False):
+    sys.stdout = StreamTee(sys.stdout)
+    sys.stdout._is_tee = True
+
+if not getattr(sys.stderr, '_is_tee', False):
+    sys.stderr = StreamTee(sys.stderr)
+    sys.stderr._is_tee = True
 
 
+# ==========================================
+# 往下是常规的系统诊断与读取逻辑
+# ==========================================
 def ping_url(url, proxies=None):
     start = time.time()
     try:
@@ -81,10 +120,10 @@ async def network_check():
 async def get_logs(lines: int = 150):
     """直接从内存环形队列中读取最新日志"""
     try:
-        if not memory_handler:
+        if not hasattr(sys, '_emby_pulse_log_queue'):
             return {"success": False, "msg": "日志服务未初始化"}
             
-        logs_list = list(memory_handler.logs)[-lines:]
+        logs_list = list(sys._emby_pulse_log_queue)[-lines:]
         return {"success": True, "data": "\n".join(logs_list)}
     except Exception as e:
         return {"success": False, "msg": str(e)}
@@ -102,7 +141,10 @@ async def toggle_debug(req: Request):
     uvicorn_logger.setLevel(level)
     app_logger.setLevel(level)
     
+    # 用 print 测试一下，新版的流劫持器会自动捕获并加上时间戳
     if enable:
-        app_logger.debug("======== DEBUG MODE ENABLED BY CONTROL CENTER ========")
+        print("======== DEBUG 模式已被控制中心动态开启 ========")
+    else:
+        print("======== DEBUG 模式已关闭，恢复 INFO 级别 ========")
         
     return {"success": True, "msg": f"Debug 模式已{'开启' if enable else '关闭'}"}

@@ -410,7 +410,11 @@ class NotificationBot:
         series_name = series_info.get('Name', '未知剧集')
         year = series_info.get("ProductionYear", "")
         rating = series_info.get("CommunityRating", "N/A")
-        overview = series_info.get("Overview", "暂无简介...") 
+        
+        # 🔥 剧情简介强制清洗首尾空白
+        overview = str(series_info.get("Overview") or "")
+        overview = re.sub(r'<[^>]+>', '', overview).strip()
+        if not overview: overview = "暂无简介..."
         if len(overview) > 150: overview = overview[:140] + "..."
         
         base_url = cfg.get_main_public_url() or cfg.get("emby_host")
@@ -431,7 +435,11 @@ class NotificationBot:
         name = item.get("Name", "未知")
         year = item.get("ProductionYear", "")
         rating = item.get("CommunityRating", "N/A")
-        overview = item.get("Overview", "暂无简介...")
+        
+        # 🔥 剧情简介强制清洗首尾空白
+        overview = str(item.get("Overview") or "")
+        overview = re.sub(r'<[^>]+>', '', overview).strip()
+        if not overview: overview = "暂无简介..."
         if len(overview) > 150: overview = overview[:140] + "..."
         
         type_raw = item.get("Type")
@@ -489,7 +497,9 @@ class NotificationBot:
 
             target_id = item.get("Id")
             raw_type = item.get("Type", "")
-            series_id = item.get("SeriesId")
+            
+            # 🔥 修复：先尝试从 Webhook 的 Item 中直接提取 SeriesId，如果没有再兜底去 Session 里找
+            series_id = item.get("SeriesId") or session.get("NowPlayingItem", {}).get("SeriesId")
             
             # 主动抓取可能缺失的剧情简介和评分
             if target_id:
@@ -497,20 +507,29 @@ class NotificationBot:
                     host = cfg.get("emby_host")
                     key = cfg.get("emby_api_key")
                     
-                    if run_ticks <= 0 or not item.get("Overview") or not item.get("CommunityRating"):
-                        detail_res = requests.get(f"{host}/emby/Items/{target_id}?api_key={key}", timeout=2).json()
-                        if run_ticks <= 0:
-                            run_ticks = int(detail_res.get("RunTimeTicks") or 0)
-                        if not item.get("Overview"):
-                            item["Overview"] = detail_res.get("Overview")
-                        if not item.get("CommunityRating"):
-                            item["CommunityRating"] = detail_res.get("CommunityRating")
+                    detail_res = requests.get(f"{host}/emby/Items/{target_id}?api_key={key}", timeout=2).json()
+                    
+                    if run_ticks <= 0:
+                        run_ticks = int(detail_res.get("RunTimeTicks") or 0)
+                        
+                    # 如果仍没有拿到 SeriesId，去当前项目的详情里拿
+                    if not series_id:
+                        series_id = detail_res.get("SeriesId") or detail_res.get("ParentId")
+                        
+                    ep_overview = item.get("Overview")
+                    # 强力洗净判断：如果是纯空格，视为无效，去拿详情补充
+                    if not ep_overview or not str(ep_overview).strip():
+                        item["Overview"] = detail_res.get("Overview")
+                        
+                    if not item.get("CommunityRating"):
+                        item["CommunityRating"] = detail_res.get("CommunityRating")
                             
-                    # 🔥 修复：如果是单集，且单集由于没有元数据导致没简介，自动顺藤摸瓜抓取【整部剧】的简介/评分
+                    # 🔥 核心防穿透逻辑：如果是单集，且上面的步骤（单集详情）依旧没提供简介，则顺藤摸瓜抓取【整部剧】的简介/评分
                     if raw_type == "Episode" and series_id:
-                        if not item.get("Overview") or not item.get("CommunityRating"):
+                        current_overview = item.get("Overview")
+                        if not current_overview or not str(current_overview).strip() or not item.get("CommunityRating"):
                             series_res = requests.get(f"{host}/emby/Items/{series_id}?api_key={key}", timeout=2).json()
-                            if not item.get("Overview"):
+                            if not current_overview or not str(current_overview).strip():
                                 item["Overview"] = series_res.get("Overview")
                             if not item.get("CommunityRating"):
                                 item["CommunityRating"] = series_res.get("CommunityRating")
@@ -555,9 +574,13 @@ class NotificationBot:
             rating = item.get("CommunityRating")
             rating_str = f"{rating}/10" if rating else "无"
             
-            overview = item.get("Overview") or "暂无简介..."
-            overview = re.sub(r'<[^>]+>', '', overview) # 剔除HTML标签
-            if len(overview) > 150: overview = overview[:140] + "..."
+            # 🔥 强制清洗首尾全部不可见幽灵字符
+            overview_raw = str(item.get("Overview") or "")
+            overview = re.sub(r'<[^>]+>', '', overview_raw).strip() 
+            if not overview:
+                overview = "暂无简介..."
+            elif len(overview) > 150: 
+                overview = overview[:140] + "..."
 
             msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
                    f"⭐ <b>评分：</b>{rating_str} ｜ 📚 <b>类型：</b>{type_cn}\n"
@@ -1242,7 +1265,11 @@ class NotificationBot:
             year_str = f"({year})" if year else ""
             rating = details.get("CommunityRating", "N/A")
             genres = " / ".join(details.get("Genres", [])[:3]) or "未分类"
-            overview = details.get("Overview", "暂无简介")
+            
+            # 🔥 强制清洗首尾全部不可见幽灵字符
+            overview = str(details.get("Overview") or "")
+            overview = re.sub(r'<[^>]+>', '', overview).strip()
+            if not overview: overview = "暂无简介"
             if len(overview) > 120: overview = overview[:120] + "..."
             
             type_icon = "🎬" if type_raw == "Movie" else "📺"

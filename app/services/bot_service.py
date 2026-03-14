@@ -206,7 +206,6 @@ class SystemDaemon:
         admin_id = get_admin_id()
         series_info = {}
         
-        # 🔥 优化：在核销缺集前，先提取出该剧集的精确名称
         try:
             url = f"{host}/emby/Users/{admin_id}/Items/{series_id}?api_key={key}"
             res = requests.get(url, timeout=10)
@@ -216,7 +215,6 @@ class SystemDaemon:
 
         series_name = series_info.get('Name', '未知剧集')
 
-        # 执行残卷自动核销并带上剧集名称
         try:
             for ep in episodes:
                 s_idx = ep.get('ParentIndexNumber'); e_idx = ep.get('IndexNumber')
@@ -368,7 +366,6 @@ class NotificationBot:
         except Exception as e:
             logger.error(f"写入风控通知失败: {e}")
 
-    # 🔥 优化：残卷补全带有剧集名称
     def on_gap_cleared(self, data):
         if not cfg.get("enable_library_notify"): return
         s_idx = data["s_idx"]; e_idx = data["e_idx"]
@@ -465,6 +462,7 @@ class NotificationBot:
         except:
             return "00:00:00"
 
+    # 🔥 全新设计的完美播放/停止通知格式
     def on_playback_event(self, data, action):
         if not cfg.get("enable_notify"): return
         try:
@@ -479,23 +477,6 @@ class NotificationBot:
                 logger.info(f"🔇 [静音规则] 拦截了用户 {user_name} 的播放通知")
                 return
 
-            title = item.get("Name") or "未知内容"
-            ep_info = ""; raw_type = item.get("Type", "")
-            type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
-            type_cn = type_map.get(raw_type, "媒体")
-            
-            if raw_type == "Episode" and item.get("SeriesName"): 
-                idx = item.get("IndexNumber", 0); parent_idx = item.get("ParentIndexNumber", 1)
-                ep_info = f" S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} 第 {idx} 集"
-                title = f"{item.get('SeriesName')}"
-            elif raw_type == "Audio" and item.get("Artists"):
-                artist_str = ", ".join(item.get("Artists"))
-                title = f"{title} - {artist_str}"
-            
-            emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
-            ip = session.get("RemoteEndPoint") or data.get("RemoteEndPoint") or "127.0.0.1"
-            loc = self._get_location(ip)
-            
             play_state = session.get("PlayState", {})
             playback_info = data.get("PlaybackInfo", {})
             
@@ -509,13 +490,21 @@ class NotificationBot:
 
             target_id = item.get("Id")
             
-            if target_id and (run_ticks <= 0 or pos_ticks <= 0):
+            # 主动抓取可能缺失的剧情简介和评分
+            if target_id:
                 try:
                     host = cfg.get("emby_host")
                     key = cfg.get("emby_api_key")
-                    if run_ticks <= 0:
+                    
+                    if run_ticks <= 0 or not item.get("Overview") or not item.get("CommunityRating"):
                         detail_res = requests.get(f"{host}/emby/Items/{target_id}?api_key={key}", timeout=2).json()
-                        run_ticks = int(detail_res.get("RunTimeTicks") or 0)
+                        if run_ticks <= 0:
+                            run_ticks = int(detail_res.get("RunTimeTicks") or 0)
+                        if not item.get("Overview"):
+                            item["Overview"] = detail_res.get("Overview")
+                        if not item.get("CommunityRating"):
+                            item["CommunityRating"] = detail_res.get("CommunityRating")
+                            
                     if pos_ticks <= 0 and session.get("Id"):
                         sess_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=2).json()
                         for s in sess_res:
@@ -523,24 +512,51 @@ class NotificationBot:
                                 pos_ticks = int(s.get("PlayState", {}).get("PositionTicks") or 0)
                                 break
                 except: pass
+
+            title = item.get("Name") or "未知内容"
+            ep_info = ""; raw_type = item.get("Type", "")
+            type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
+            type_cn = type_map.get(raw_type, "媒体")
+            
+            if raw_type == "Episode" and item.get("SeriesName"): 
+                idx = item.get("IndexNumber", 0); parent_idx = item.get("ParentIndexNumber", 1)
+                ep_info = f" S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} {title}"
+                title = f"{item.get('SeriesName')}"
+            elif raw_type == "Audio" and item.get("Artists"):
+                artist_str = ", ".join(item.get("Artists"))
+                title = f"{title} - {artist_str}"
+            
+            emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
+            ip = session.get("RemoteEndPoint") or data.get("RemoteEndPoint") or "127.0.0.1"
+            loc = self._get_location(ip)
             
             if run_ticks <= 1:
-                progress_html = f"⏱️ <b>进度</b>：🟢 实时流/未知总时长"
+                progress_str = "🟢 实时流/未知总时长"
             else:
                 pct = int((pos_ticks / run_ticks) * 100)
                 pct = min(max(pct, 0), 100)
                 pos_str = self._format_ticks(pos_ticks)
                 run_str = self._format_ticks(run_ticks)
-                progress_html = f"⏱️ <b>进度</b>：<code>{pos_str} / {run_str} ({pct}%)</code>"
+                progress_str = f"{pos_str} / {run_str} ({pct}%)"
 
             client = session.get("Client") or data.get("Client") or "未知端"
             device = session.get("DeviceName") or data.get("DeviceName") or "未知设备"
+            
+            rating = item.get("CommunityRating")
+            rating_str = f"{rating}/10" if rating else "无"
+            
+            overview = item.get("Overview") or "暂无简介..."
+            overview = re.sub(r'<[^>]+>', '', overview) # 剔除HTML标签
+            if len(overview) > 150: overview = overview[:140] + "..."
 
+            # 完美套用需求模板排版
             msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
-                   f"{progress_html}\n"
-                   f"🌐 <b>地址</b>：{ip} ({loc})\n"
-                   f"📱 <b>设备</b>：{client} on {device}\n"
-                   f"🕒 <b>时间</b>：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                   f"⭐ <b>评分：</b>{rating_str} ｜ 📚 <b>类型：</b>{type_cn}\n"
+                   f"🔄 <b>进度：</b>{progress_str}\n"
+                   f"🌐 <b>IP地址：</b>{ip} {loc}\n"
+                   f"📱 <b>设备：</b>{client} {device}\n"
+                   f"🕒 <b>时间：</b>{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                   f"📝 <b>剧情：</b>{overview}")
             
             target_jump_id = target_id
             if raw_type == "Episode" and item.get("SeriesId"): target_jump_id = item.get("SeriesId")
@@ -598,7 +614,6 @@ class NotificationBot:
             raw_type = item.get("Type", "")
             title = item.get("Name") or item.get("Title") or "未知资源"
             
-            # 🔥 优化：解耦拦截“用户被删除”这一特殊事件，防止它被识别成媒体删除
             if raw_type == "User" or "删除了用户" in title:
                 msg = (f"🗑️ <b>系统安全告警</b>\n\n"
                        f"👤 <b>事件：</b>{title}\n"
@@ -887,7 +902,6 @@ class NotificationBot:
                 base_emby = (cfg.get_main_public_url() or cfg.get("emby_host")).rstrip('/')
                 pic_url = f"{base_emby}/emby/Items/{item_id_match.group(1)}/Images/Primary?maxHeight=800&maxWidth=600&api_key={cfg.get('emby_api_key')}"
 
-            # 🔥 优化：企微的系统/求片事件，自动纠正跳转到 EmbyPulse 后台
             pulse_url = cfg.get("pulse_url")
             if pulse_url and any(kw in title for kw in ["求片", "心愿", "报错", "工单", "风控", "系统告警", "安全告警"]):
                 base_pulse = pulse_url.rstrip('/')
@@ -900,6 +914,7 @@ class NotificationBot:
             res = requests.post(f"{proxy_url}/cgi-bin/message/send?access_token={token}", json={"touser": touser, "msgtype": "news", "agentid": int(agentid), "news": {"articles": [{"title": title, "description": desc, "url": jump_url, "picurl": pic_url}]}}, timeout=10)
             if res.status_code != 200 or res.json().get("errcode", 0) != 0: self._send_wecom_message(html_text, inline_keyboard, touser)
         except: self._send_wecom_message(html_text, inline_keyboard, touser)
+
     def send_photo(self, chat_id, photo_io, caption, parse_mode="HTML", reply_markup=None, platform="all", wecom_photo_io=None):
         photo_bytes = None
         if isinstance(photo_io, str):
@@ -922,7 +937,6 @@ class NotificationBot:
             threading.Thread(target=self._send_wecom_photo, args=(wecom_photo_bytes, caption, reply_markup, chat_id if platform == "wecom" else cfg.get("wecom_touser", "@all"))).start()
 
         if platform in ["all", "tg"] and cfg.get("tg_bot_token"):
-            # 🔥 升级：切分多个 TG Chat ID 遍历发送，并自动替换中文逗号
             raw_cids = str(cfg.get("tg_chat_id", ""))
             tg_cids = [chat_id] if platform == "tg" else [c.strip() for c in raw_cids.replace('，', ',').split(',') if c.strip()]
             
@@ -937,12 +951,12 @@ class NotificationBot:
                         self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
                 except: 
                     self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
+
     def send_message(self, chat_id, text, parse_mode="HTML", reply_markup=None, platform="all"):
         if platform in ["all", "wecom"] and cfg.get("wecom_corpid"):
             threading.Thread(target=self._send_wecom_message, args=(text, reply_markup, chat_id if platform == "wecom" else cfg.get("wecom_touser", "@all"))).start()
 
         if platform in ["all", "tg"] and cfg.get("tg_bot_token"):
-            # 🔥 升级：切分多个 TG Chat ID 遍历发送
             raw_cids = str(cfg.get("tg_chat_id", ""))
             tg_cids = [chat_id] if platform == "tg" else [c.strip() for c in raw_cids.replace('，', ',').split(',') if c.strip()]
             
@@ -957,7 +971,6 @@ class NotificationBot:
         token = cfg.get("tg_bot_token")
         
         while self.running:
-            # 🔥 移入循环内部读取，这样热修改配置文件后，轮询权限也会实时更新
             raw_cids = str(cfg.get("tg_chat_id", ""))
             admin_ids = [c.strip() for c in raw_cids.replace('，', ',').split(',') if c.strip()]
             
@@ -968,13 +981,11 @@ class NotificationBot:
                         self.offset = u["update_id"] + 1
                         if "message" in u:
                             cid = str(u["message"]["chat"]["id"]) 
-                            # 🔥 权限判定升级：只要在数组内的 ID，全都有权控制机器人
                             if admin_ids and cid not in admin_ids: continue
                             self._handle_message(u["message"].get("text", ""), cid, platform="tg")
                         elif "callback_query" in u:
                             cq = u["callback_query"]
                             cid = str(cq["message"]["chat"]["id"])
-                            # 🔥 控制按钮回调的权限判定升级
                             if admin_ids and cid not in admin_ids: continue
                             threading.Thread(target=self._handle_callback, args=(cq,)).start()
                 else: time.sleep(5)
@@ -1392,7 +1403,6 @@ class NotificationBot:
                        f"📺 剧集：{series_count} 部 (共 {ep_count} 集)\n\n"
                        f"👥 <b>当前活跃</b>：{active_users} 人正在观看")
 
-                # 🔥 优化：在探针指令里增加公网入口节点的独立测速
                 try:
                     raw_url_str = cfg.get("emby_public_url", "")
                     routes = []

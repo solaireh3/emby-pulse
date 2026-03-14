@@ -462,7 +462,6 @@ class NotificationBot:
         except:
             return "00:00:00"
 
-    # 🔥 全新设计的完美播放/停止通知格式
     def on_playback_event(self, data, action):
         if not cfg.get("enable_notify"): return
         try:
@@ -489,6 +488,8 @@ class NotificationBot:
             except: run_ticks = 0
 
             target_id = item.get("Id")
+            raw_type = item.get("Type", "")
+            series_id = item.get("SeriesId")
             
             # 主动抓取可能缺失的剧情简介和评分
             if target_id:
@@ -505,6 +506,15 @@ class NotificationBot:
                         if not item.get("CommunityRating"):
                             item["CommunityRating"] = detail_res.get("CommunityRating")
                             
+                    # 🔥 修复：如果是单集，且单集由于没有元数据导致没简介，自动顺藤摸瓜抓取【整部剧】的简介/评分
+                    if raw_type == "Episode" and series_id:
+                        if not item.get("Overview") or not item.get("CommunityRating"):
+                            series_res = requests.get(f"{host}/emby/Items/{series_id}?api_key={key}", timeout=2).json()
+                            if not item.get("Overview"):
+                                item["Overview"] = series_res.get("Overview")
+                            if not item.get("CommunityRating"):
+                                item["CommunityRating"] = series_res.get("CommunityRating")
+
                     if pos_ticks <= 0 and session.get("Id"):
                         sess_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=2).json()
                         for s in sess_res:
@@ -514,7 +524,7 @@ class NotificationBot:
                 except: pass
 
             title = item.get("Name") or "未知内容"
-            ep_info = ""; raw_type = item.get("Type", "")
+            ep_info = ""
             type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
             type_cn = type_map.get(raw_type, "媒体")
             
@@ -549,7 +559,6 @@ class NotificationBot:
             overview = re.sub(r'<[^>]+>', '', overview) # 剔除HTML标签
             if len(overview) > 150: overview = overview[:140] + "..."
 
-            # 完美套用需求模板排版
             msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
                    f"⭐ <b>评分：</b>{rating_str} ｜ 📚 <b>类型：</b>{type_cn}\n"
                    f"🔄 <b>进度：</b>{progress_str}\n"

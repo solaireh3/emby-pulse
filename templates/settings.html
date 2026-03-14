@@ -130,16 +130,23 @@
                 对外服务门户
             </h3>
             <div class="flex-1 flex flex-col justify-start space-y-5">
+                
                 <div class="col-span-1 md:col-span-2 bg-white dark:bg-[#1C1C1E] p-4 rounded-2xl border border-gray-200/80 dark:border-white/10 shadow-sm">
                     <label class="block text-[13px] font-bold text-gray-800 dark:text-gray-200 mb-1">
                         <i class="fa-solid fa-network-wired text-brand-500 mr-1.5"></i> 公网访问入口 (支持多线路测速)
                     </label>
-                    <p class="text-[11px] text-gray-500 mb-3">系统逻辑默认强制走“主线”，备用线路仅在注册页展示给用户作测速备选。</p>
+                    <p class="text-[11px] text-gray-500 mb-3">系统逻辑默认强制走“主线”，备用线路仅展示给用户作测速备选。</p>
                     <input type="hidden" id="emby_public_url" name="emby_public_url">
                     <div id="routes-container" class="space-y-2"></div>
-                    <button type="button" onclick="addRouteRow()" class="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors text-[12px] font-bold active:scale-[0.98]">
-                        <i class="fa-solid fa-plus"></i> 添加新线路节点
-                    </button>
+                    
+                    <div class="flex gap-2 mt-3">
+                        <button type="button" onclick="pingAllAdmin()" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors text-[12px] font-bold active:scale-[0.98]">
+                            <i class="fa-solid fa-satellite-dish"></i> 测试所有延迟
+                        </button>
+                        <button type="button" onclick="addRouteRow()" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-emerald-300 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors text-[12px] font-bold active:scale-[0.98]">
+                            <i class="fa-solid fa-plus"></i> 添加新线路
+                        </button>
+                    </div>
                 </div>
                 
                 <div>
@@ -382,12 +389,10 @@ async function loadSettings() {
         renderHiddenUsers();
         updateWebhookPreview();
         
-        // 初始化线路 UI
         if(typeof initRoutes === 'function') initRoutes();
     }
 }
 
-// 🔥 线路管理逻辑
 function initRoutes() {
     const rawStr = document.getElementById('emby_public_url').value;
     try {
@@ -412,8 +417,16 @@ function renderRoutes() {
                     <input type="radio" name="main_route" onchange="setMainRoute(${index})" class="w-4 h-4 text-emerald-500 focus:ring-emerald-500 border-gray-300 cursor-pointer" ${isMainChecked}>
                     <span class="ml-1.5 text-[10px] font-bold ${r.is_main ? 'text-emerald-500' : 'text-gray-400 group-hover:text-gray-500'}">主线</span>
                 </label>
-                <input type="text" placeholder="别名 (如: 电信直连)" value="${r.name}" oninput="updateRoute(${index}, 'name', this.value)" class="w-1/3 px-3 py-2 rounded-lg border-none bg-white dark:bg-[#2C2C2E] text-[12px] font-bold text-gray-800 dark:text-gray-200 shadow-sm outline-none">
+                <input type="text" placeholder="别名 (如: 电信直连)" value="${r.name}" oninput="updateRoute(${index}, 'name', this.value)" class="w-1/4 px-3 py-2 rounded-lg border-none bg-white dark:bg-[#2C2C2E] text-[12px] font-bold text-gray-800 dark:text-gray-200 shadow-sm outline-none">
                 <input type="text" placeholder="https://..." value="${r.url}" oninput="updateRoute(${index}, 'url', this.value)" class="flex-1 px-3 py-2 rounded-lg border-none bg-white dark:bg-[#2C2C2E] text-[12px] font-mono text-gray-600 dark:text-gray-400 shadow-sm outline-none">
+                
+                <div class="flex items-center justify-end w-12 shrink-0 border-l border-gray-200/50 dark:border-white/5 pl-2">
+                    <span id="admin-ping-txt-${index}" class="text-[10px] font-mono font-bold text-gray-400 truncate text-right w-full">未测</span>
+                </div>
+                
+                <button type="button" onclick="pingRouteAdmin(${index})" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors shrink-0" title="测试此线路延迟">
+                    <i class="fa-solid fa-satellite-dish text-[13px]"></i>
+                </button>
                 <button type="button" onclick="removeRoute(${index})" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 transition-colors shrink-0 ${trashBtnClass}" ${r.is_main ? 'disabled title="主线路不可删除"' : 'title="移除线路"'}>
                     <i class="fa-solid fa-trash text-[13px]"></i>
                 </button>
@@ -446,6 +459,43 @@ function updateRoute(index, field, val) {
 
 function syncHiddenInput() {
     document.getElementById('emby_public_url').value = JSON.stringify(routesData);
+}
+
+function pingRouteAdmin(index) {
+    const r = routesData[index];
+    if(!r.url) return;
+    const txt = document.getElementById(`admin-ping-txt-${index}`);
+    txt.innerText = "...";
+    txt.className = "text-[10px] font-mono font-bold text-blue-500 animate-pulse truncate text-right w-full";
+
+    const start = Date.now();
+    const img = new Image();
+    img.src = `${r.url.replace(/\/$/, '')}/web/favicon.ico?t=${Math.random()}`;
+
+    img.onload = () => {
+        const latency = Date.now() - start;
+        txt.innerText = `${latency}ms`;
+        if(latency < 80) txt.className = "text-[10px] font-mono font-bold text-green-500 truncate text-right w-full";
+        else if(latency < 200) txt.className = "text-[10px] font-mono font-bold text-amber-500 truncate text-right w-full";
+        else txt.className = "text-[10px] font-mono font-bold text-red-500 truncate text-right w-full";
+    };
+
+    img.onerror = () => {
+        txt.innerText = "超时";
+        txt.className = "text-[10px] font-mono font-bold text-red-500 truncate text-right w-full";
+    };
+
+    setTimeout(() => {
+        if(txt.innerText === "...") {
+            img.src = "";
+            txt.innerText = "超时";
+            txt.className = "text-[10px] font-mono font-bold text-red-500 truncate text-right w-full";
+        }
+    }, 3000);
+}
+
+function pingAllAdmin() {
+    routesData.forEach((_, i) => pingRouteAdmin(i));
 }
 
 function renderHiddenUsers() {

@@ -155,7 +155,8 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
         items = []; start = 0; limit = 10000
         while True:
             url = f"{host}/emby/Users/{admin_id}/Items"
-            params = { "IncludeItemTypes": "Movie,Episode", "Recursive": "true", "Fields": "ProviderIds,ParentIndexNumber,IndexNumber,IndexNumberEnd,SeriesId", "StartIndex": start, "Limit": limit, "api_key": key }
+            # 🔥 修复关键：要求 API 提前返回 MediaSources，以便精准探明合并版本
+            params = { "IncludeItemTypes": "Movie,Episode", "Recursive": "true", "Fields": "ProviderIds,ParentIndexNumber,IndexNumber,IndexNumberEnd,SeriesId,MediaSources", "StartIndex": start, "Limit": limit, "api_key": key }
             chunk = requests.get(url, params=params, timeout=30).json().get("Items", [])
             items.extend(chunk)
             if len(chunk) < limit: break
@@ -181,7 +182,13 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
             
             if g_key not in whitelist: groups[g_key].append(i)
                 
-        dup_groups = {k: v for k, v in groups.items() if len(v) > 1}
+        # 🔥 修复关键：不再单纯依靠 Item 的数量判断，而是计算其内部包含的 MediaSource 物理文件总数！
+        dup_groups = {}
+        for k, v in groups.items():
+            total_sources = sum([len(item.get("MediaSources", [{}])) for item in v])
+            if total_sources > 1:
+                dup_groups[k] = v
+
         scan_state["duplicate_groups"] = len(dup_groups)
         
         conn = sqlite3.connect(DB_PATH)
@@ -201,24 +208,35 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
             parsed_items = []
             for d in details:
                 is_exempt = 1 if d.get("IndexNumberEnd") and d.get("IndexNumberEnd") > d.get("IndexNumber", 0) else 0
-                src = d.get("MediaSources", [{}])[0] if d.get("MediaSources") else {}
-                score, tags = calculate_score(src, strategy, custom_weights)
+                media_sources = d.get("MediaSources", [])
                 
-                full_path = src.get("Path", "")
-                file_name = full_path.split("/")[-1].split("\\")[-1] if full_path else d.get("Name", "未知文件")
+                if not media_sources: continue
                 
-                tmdb_val = g_key.split("_")[1] if "_" in g_key else ""
-                
-                parsed_items.append({
-                    "g_key": g_key, "tmdb": str(tmdb_val),
-                    "mtype": d.get("Type"), "title": d.get("SeriesName") or d.get("Name", ""),
-                    "season": d.get("ParentIndexNumber", 0), "episode": d.get("IndexNumber", 0),
-                    "item_id": d["Id"], "file_name": file_name, "file_path": full_path,
-                    "res": tags["res"], "bitrate": src.get("Bitrate") or 0, "size": src.get("Size") or 0, 
-                    "v_codec": tags["v_codec"], "a_codec": tags["a_codec"],
-                    "hdr": tags["has_hdr"], "dovi": tags["has_dovi"], "chi": tags["has_chi"], "ass": tags["has_ass"],
-                    "score": score, "exempt": is_exempt
-                })
+                # 🔥 修复关键：全面遍历所有媒体源，不再只提取 [0]
+                for idx, src in enumerate(media_sources):
+                    score, tags = calculate_score(src, strategy, custom_weights)
+                    
+                    full_path = src.get("Path", "")
+                    file_name = full_path.split("/")[-1].split("\\")[-1] if full_path else d.get("Name", "未知文件")
+                    tmdb_val = g_key.split("_")[1] if "_" in g_key else ""
+                    
+                    # 生成复合定向 ID，确保在多版本合并状态下，能精确且安全地删除副版本，而不伤及主版本
+                    source_id = src.get("Id")
+                    if idx == 0 or not source_id or source_id == d["Id"]:
+                        composite_id = d["Id"]  # 主线本体
+                    else:
+                        composite_id = f"{d['Id']}__{source_id}"  # 隐藏的副本分支
+                    
+                    parsed_items.append({
+                        "g_key": g_key, "tmdb": str(tmdb_val),
+                        "mtype": d.get("Type"), "title": d.get("SeriesName") or d.get("Name", ""),
+                        "season": d.get("ParentIndexNumber", 0), "episode": d.get("IndexNumber", 0),
+                        "item_id": composite_id, "file_name": file_name, "file_path": full_path,
+                        "res": tags["res"], "bitrate": src.get("Bitrate") or 0, "size": src.get("Size") or 0, 
+                        "v_codec": tags["v_codec"], "a_codec": tags["a_codec"],
+                        "hdr": tags["has_hdr"], "dovi": tags["has_dovi"], "chi": tags["has_chi"], "ass": tags["has_ass"],
+                        "score": score, "exempt": is_exempt
+                    })
             
             if parsed_items:
                 parsed_items.sort(key=lambda x: x["score"], reverse=True)
@@ -296,7 +314,6 @@ async def get_results():
         info_res = requests.get(f"{host}/emby/System/Info?api_key={key}", timeout=2).json()
         raw_id = info_res.get("Id", "")
         if raw_id:
-            # 🔥 这里同样强制干掉换行符
             server_id = str(raw_id).replace('\r', '').replace('\n', '').strip()
             
         if not server_id:
@@ -346,13 +363,21 @@ async def delete_items(req: DeleteReq):
     except Exception as e: return {"success": False, "msg": f"⚠️ 连接 Emby 安全验证服务器失败: {e}"}
     
     success_count = 0; fail_count = 0
-    for item_id in req.item_ids:
+    for composite_id in req.item_ids:
         try:
-            res = requests.delete(f"{host}/emby/Items/{item_id}?api_key={key}", timeout=10)
+            # 🔥 修复关键：调用专用的 AlternateSources 删除接口，安全抹除副版本物理文件
+            if "__" in composite_id:
+                item_id, source_id = composite_id.split("__")
+                res = requests.delete(f"{host}/emby/Videos/{item_id}/AlternateSources?AlternateSourceId={source_id}&api_key={key}", timeout=10)
+            else:
+                res = requests.delete(f"{host}/emby/Items/{composite_id}?api_key={key}", timeout=10)
+                
             if res.status_code in [200, 204]:
                 success_count += 1
-                query_db("DELETE FROM dedupe_results WHERE item_id = ?", (item_id,))
-            else: fail_count += 1
-        except: fail_count += 1
+                query_db("DELETE FROM dedupe_results WHERE item_id = ?", (composite_id,))
+            else: 
+                fail_count += 1
+        except: 
+            fail_count += 1
             
     return {"success": True, "msg": f"操作完成。成功物理删除 {success_count} 个文件，失败 {fail_count} 个。"}

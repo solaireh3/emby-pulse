@@ -4,7 +4,6 @@ import logging
 import time
 import threading
 from app.core.config import cfg, DB_PATH
-# 👇 引入刚才新增的 add_sys_notification
 from app.core.database import add_sys_notification
 from app.core.event_bus import bus
 
@@ -73,6 +72,8 @@ def get_user_concurrent_limit(user_id: str) -> int:
     return int(cfg.get("default_max_concurrent", 2))
 
 _alerted_sessions = set()
+# 🔥 核心更新：状态记忆体，用于记录上一次扫描的并发情况，防刷屏
+_last_playback_state = {}
 
 def scan_playbacks_and_alert():
     if not cfg.get("enable_risk_control", True): return
@@ -96,18 +97,27 @@ def scan_playbacks_and_alert():
                 active_playbacks[uid].append(s)
                 
         global _alerted_sessions
+        global _last_playback_state
+        
         current_alert_fingerprints = set()
         
-        # 🔥 只有在真正有人看视频的时候，才在控制台打印这句战报，0人的时候静默防守
-        if len(active_playbacks) > 0:
-            logger.info(f"📡 [天眼雷达] 正在扫网... 发现 {len(active_playbacks)} 名用户正在看视频。")
+        # 提取当前所有用户的并发数简影：{ uid: count }
+        current_playback_state = {uid: len(sessions) for uid, sessions in active_playbacks.items()}
+        
+        # 只有在有人看，且状态与上一次不同时（有人进、出或多开），才打印雷达大盘日志
+        state_changed = current_playback_state != _last_playback_state
+        
+        if len(active_playbacks) > 0 and state_changed:
+            logger.info(f"📡 [天眼雷达] 播放并发状态发生更新... 当前有 {len(active_playbacks)} 名用户在看视频。")
 
         for uid, user_sessions in active_playbacks.items():
             limit = get_user_concurrent_limit(uid)
             current_count = len(user_sessions)
             username = user_sessions[0].get("UserName", "未知用户")
             
-            logger.info(f"   ▶️ 锁定用户: {username} | 当前并发: {current_count} | 专属限额: {limit}")
+            # 🔥 重点拦截：只有当具体的这个用户并发数变化了，才打印它的日志
+            if current_count != _last_playback_state.get(uid, 0):
+                logger.info(f"   ▶️ 锁定用户: {username} | 当前并发: {current_count} | 专属限额: {limit}")
             
             if current_count > limit:
                 devices_info = []
@@ -128,23 +138,26 @@ def scan_playbacks_and_alert():
                     logger.warning(f"🚨 [风控执行] 发现越界！立即通过总线呼叫机器人发送警报！")
                     
                     bus.publish("notify.risk.alert", {
-                        "user_id": uid,          # 🔥 必须传给机器人用于封禁按钮
+                        "user_id": uid,          
                         "username": username,
                         "current": current_count,
                         "limit": limit,
                         "devices_info": devices_text
                     })
                 else:
-                    logger.info(f"⚠️ [风控防抖] {username} 的这批设备已在处置中，忽略重复报警...")
+                    if state_changed:
+                        logger.info(f"⚠️ [风控防抖] {username} 的这批设备已在处置中，忽略重复报警...")
                     
+        # 更新记忆体状态
         _alerted_sessions.clear()
         _alerted_sessions.update(current_alert_fingerprints)
+        _last_playback_state = current_playback_state
                     
     except Exception as e:
         logger.error(f"[风控天眼] 扫描异常: {e}")
 
 def _on_playback_start(data):
-    logger.info("🔔 [事件总线] 捕获到视频播放动作，雷达将在 3 秒后启动...")
+    # 稍微延迟等 Emby session 注册完成再扫描
     def delay_scan():
         time.sleep(3)
         scan_playbacks_and_alert()
@@ -156,7 +169,6 @@ def _risk_monitor_loop():
         except: pass
         time.sleep(60) 
 
-# 👇 新增：为 Web 端全局通知中心订阅风控事件
 def _on_risk_alert_for_web(data):
     username = data.get("username", "未知")
     current = data.get("current", 0)
@@ -171,7 +183,6 @@ def _on_risk_alert_for_web(data):
 
 def start_risk_monitor():
     bus.subscribe("notify.playback.start", _on_playback_start)
-    # 👇 新增：将这个动作挂载到事件总线上
     bus.subscribe("notify.risk.alert", _on_risk_alert_for_web)
     
     threading.Thread(target=_risk_monitor_loop, daemon=True, name="RiskMonitorThread").start()

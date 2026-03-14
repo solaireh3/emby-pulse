@@ -92,7 +92,6 @@
     let pollInterval = null;
     let isDropdownOpen = false;
 
-    // 点击其他地方关闭下拉浮窗
     document.addEventListener('click', (e) => {
         const container = document.getElementById('running-tasks-dropdown-container');
         if (isDropdownOpen && container && !container.contains(e.target)) {
@@ -158,14 +157,12 @@
                     pollInterval = null;
                 }
             } else {
-                // 如果 API 返回失败
                 if(container.innerHTML.includes('fa-circle-notch')) {
                     container.innerHTML = `<div class="text-center py-40 text-red-500 font-bold text-[13px] tracking-widest"><i class="fa-solid fa-circle-exclamation mr-2 text-xl"></i>获取任务失败: ${json.message || '未知错误'}</div>`;
                 }
             }
         } catch(e) { 
             console.error(e); 
-            // 断网或服务端炸了
             if(container.innerHTML.includes('fa-circle-notch')) {
                 container.innerHTML = `<div class="text-center py-40 text-red-500 font-bold text-[13px] tracking-widest"><i class="fa-solid fa-wifi mr-2 text-xl"></i>网络请求超时，请检查后端服务</div>`;
             }
@@ -257,7 +254,8 @@
                     }
                 }
 
-                const cardBaseClass = "relative bg-white dark:bg-[#1C1C1E] rounded-[20px] p-5 flex flex-col justify-between min-h-[130px] group transition-all duration-300";
+                // 🔥 核心修复：添加 overflow-hidden 防止底部进度条突破圆角
+                const cardBaseClass = "relative bg-white dark:bg-[#1C1C1E] rounded-[20px] overflow-hidden p-5 flex flex-col justify-between min-h-[130px] group transition-all duration-300";
                 const borderClass = isRunning 
                     ? 'border border-blue-500 shadow-[0_8px_30px_rgba(59,130,246,0.15)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.2)] ring-1 ring-blue-500 scale-[1.02] z-10' 
                     : 'border border-gray-100 dark:border-white/5 shadow-sm hover:shadow-[0_12px_32px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_12px_32px_rgba(0,0,0,0.4)] hover:-translate-y-1 hover:border-gray-200 dark:hover:border-white/10';
@@ -270,7 +268,7 @@
                     
                     ${isRunning ? `<div class="absolute bottom-0 left-0 h-1.5 bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000 ease-linear z-10" style="width: ${progress}%"></div>` : ''}
                     
-                    <div class="flex justify-between items-start mb-3">
+                    <div class="flex justify-between items-start mb-3 relative z-20">
                         <div class="pr-3 overflow-hidden flex-1">
                             <div class="flex items-center gap-2 group/title">
                                 <div class="font-bold text-gray-900 dark:text-white text-[14px] truncate" title="${t.OriginalName}">${t.Name}</div>
@@ -295,7 +293,7 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 mt-auto pt-3 border-t border-gray-100 dark:border-white/5">
+                    <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 mt-auto pt-3 border-t border-gray-100 dark:border-white/5 relative z-20">
                         <div class="flex items-center">
                             ${isRunning ? 
                                 `<span class="text-blue-600 dark:text-blue-400 font-black flex items-center bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-500/20 shadow-sm animate-pulse"><i class="fa-solid fa-gear fa-spin mr-1.5"></i> 运转中 ${progress.toFixed(1)}%</span>` : 
@@ -354,7 +352,6 @@
         } catch(e) { alert('网络错误'); }
     }
 
-    // 🔥 这里补上了刚才遗漏的初始化触发器！
     document.addEventListener('DOMContentLoaded', init);
 </script>
 {% endblock %}

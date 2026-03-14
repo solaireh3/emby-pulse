@@ -746,7 +746,6 @@ class NotificationBot:
             return ip
         except: return ip
 
-    # 🔥 恢复你原本的纯净国内地名提取逻辑
     def _clean_location(self, loc):
         if not loc: return ""
         loc = re.sub(r'(中国|省|市|自治区|自治州|特别行政区|移动|联通|电信|铁通|教育网|广电|通信|数据中心|IDC)', ' ', loc)
@@ -754,7 +753,6 @@ class NotificationBot:
         loc = re.sub(r'\s+', ' ', loc).strip() 
         return loc
 
-    # 🔥 彻底抛弃海外节点，恢复原版纯净三大国内顶级接口，确保不漂移
     def _get_location(self, ip):
         if not ip: return "未知"
         is_ipv6 = False
@@ -893,6 +891,7 @@ class NotificationBot:
             requests.post(f"{proxy_url}/cgi-bin/message/send?access_token={token}", json={"touser": touser, "msgtype": "text", "agentid": int(agentid), "text": {"content": self._html_to_wecom_text(text, inline_keyboard)}}, timeout=10)
         except: pass
 
+    # 🔥 核心修复：企微卡片上传失败时的完美回退方案，优先确保横版 Backdrop 显示
     def _send_wecom_photo(self, photo_bytes, html_text, inline_keyboard=None, touser="@all"):
         token = self._get_wecom_token(); agentid = cfg.get("wecom_agentid")
         proxy_url = cfg.get("wecom_proxy_url", "https://qyapi.weixin.qq.com").rstrip('/')
@@ -902,7 +901,10 @@ class NotificationBot:
         try:
             if photo_bytes:
                 upload_res = requests.post(f"{proxy_url}/cgi-bin/media/uploadimg?access_token={token}", files={"media": ("image.jpg", photo_bytes, "image/jpeg")}, timeout=15)
-                if upload_res.status_code == 200 and upload_res.text.strip(): pic_url = upload_res.json().get("url", REPORT_COVER_URL)
+                if upload_res.status_code == 200 and upload_res.text.strip(): 
+                    resp_json = upload_res.json()
+                    if resp_json.get("errcode") == 0:
+                        pic_url = resp_json.get("url", REPORT_COVER_URL)
         except: pass
 
         try:
@@ -920,10 +922,22 @@ class NotificationBot:
                 links = re.findall(r"href=['\"](.*?)['\"]", html_text)
                 if links: jump_url = links[0]
 
+            # 🔥 当上传企微服务器失败时，系统执行兜底外链，主动探测并强制要求使用横版背景图
             item_id_match = re.search(r'id=([a-zA-Z0-9]+)', jump_url)
             if item_id_match and pic_url == REPORT_COVER_URL:
+                item_id = item_id_match.group(1)
                 base_emby = (cfg.get_main_public_url() or cfg.get("emby_host")).rstrip('/')
-                pic_url = f"{base_emby}/emby/Items/{item_id_match.group(1)}/Images/Primary?maxHeight=800&maxWidth=600&api_key={cfg.get('emby_api_key')}"
+                local_emby = cfg.get("emby_host").rstrip('/')
+                api_key = cfg.get('emby_api_key')
+                
+                img_type = "Primary"
+                try:
+                    # 极速发起内网 HEAD 请求，探测横版图存不存在
+                    if requests.head(f"{local_emby}/emby/Items/{item_id}/Images/Backdrop?api_key={api_key}", timeout=2).status_code == 200:
+                        img_type = "Backdrop"
+                except: pass
+                
+                pic_url = f"{base_emby}/emby/Items/{item_id}/Images/{img_type}?maxWidth=800&api_key={api_key}"
 
             pulse_url = cfg.get("pulse_url")
             if pulse_url and any(kw in title for kw in ["求片", "心愿", "报错", "工单", "风控", "系统告警", "安全告警"]):

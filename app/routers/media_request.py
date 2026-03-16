@@ -332,8 +332,9 @@ def check_local_status(media_type: str, tmdb_id: int):
     exists = check_emby_exists(tmdb_id, media_type)
     return {"status": "success", "exists": exists}
 
+# 注意：这里改为了 async def，并直接解析 request.json()
 @router.post("/api/requests/submit")
-def submit_media_request(data: BaseSubmitModel, request: Request = None):
+async def submit_media_request(request: Request):
     user = request.session.get("req_user")
     if not user: return {"status": "error", "message": "请先绑定 Emby 账号"}
     
@@ -341,16 +342,24 @@ def submit_media_request(data: BaseSubmitModel, request: Request = None):
     uname = user['Name']
 
     try:
+        # 🔥 修复 1：绕过 Pydantic 模型，直接安全解析 JSON
+        data = await request.json()
+        tmdb_id = data.get("tmdb_id")
+        media_type = data.get("media_type")
+        title = data.get("title")
+        year = data.get("year")
+        poster_path = data.get("poster_path")
+        season = data.get("season", 0)
+
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        # --- 🔥 1. 积分拦截系统：先过海关，检查兜里钱够不够 ---
+        # --- 1. 积分拦截系统 ---
         c.execute("SELECT value FROM point_config WHERE key = 'enable_req_cost'")
         enable_cost_row = c.fetchone()
         enable_cost = (enable_cost_row[0] == "1") if enable_cost_row else False
         
-        req_cost = 0
-        current_points = 0
+        req_cost = 0; current_points = 0
         
         if enable_cost:
             c.execute("SELECT value FROM point_config WHERE key = 'req_cost'")
@@ -365,35 +374,35 @@ def submit_media_request(data: BaseSubmitModel, request: Request = None):
                 conn.close()
                 return {"status": "error", "message": f"积分不足！求片需消耗 {req_cost} 积分，当前仅有 {current_points} 积分。请前往首页签到。"}
 
-        # --- 2. 工单查重逻辑：看看库里是不是已经有了 ---
-        c.execute("SELECT status FROM media_requests WHERE tmdb_id = ? AND season = ?", (data.tmdb_id, data.season))
+        # --- 2. 工单查重逻辑 ---
+        c.execute("SELECT status FROM media_requests WHERE tmdb_id = ? AND season = ?", (tmdb_id, season))
         existing = c.fetchone()
         if existing:
             conn.close()
             status_map = {0: "处理中", 1: "下载中", 2: "已完成", 3: "已拒绝", 4: "待手动处理"}
             return {"status": "error", "message": f"该资源工单已存在，当前状态：{status_map.get(existing[0], '未知')}"}
 
-        # --- 🔥 3. 查重通过，正式扣款并写流水 ---
+        # --- 3. 查重通过，正式扣款并写流水 ---
         if enable_cost and req_cost > 0:
             new_points = current_points - req_cost
             c.execute("UPDATE users_meta SET points = ? WHERE user_id = ?", (new_points, uid))
             c.execute("INSERT INTO point_logs (user_id, username, action, amount, balance) VALUES (?, ?, ?, ?, ?)",
-                      (uid, uname, f"提交求片心愿: {data.title}", -req_cost, new_points))
+                      (uid, uname, f"提交求片心愿: {title}", -req_cost, new_points))
 
         # --- 4. 写入求片工单表 ---
         c.execute("INSERT INTO media_requests (tmdb_id, media_type, title, year, poster_path, status, season) VALUES (?, ?, ?, ?, ?, 0, ?)",
-                  (data.tmdb_id, data.media_type, data.title, data.year, data.poster_path, data.season))
+                  (tmdb_id, media_type, title, year, poster_path, season))
         
         conn.commit()
         conn.close()
         
-        # --- 5. 触发给管理员的推送通知 ---
+        # --- 5. 触发推送通知 ---
         try:
-            add_sys_notification("request", f"收到新求片: {data.title}", f"用户 {uname} 提交了新的心愿单", "/requests_admin")
-            
-            season_str = f" 第 {data.season} 季" if data.media_type == "tv" else ""
-            msg = f"🎬 <b>收到新求片心愿</b>\n\n👤 <b>用户：</b>{uname}\n📺 <b>内容：</b>{data.title} ({data.year}){season_str}\n\n请及时前往后台审批处理。"
-            bot.send_photo("sys_notify", f"https://image.tmdb.org/t/p/w500{data.poster_path}" if data.poster_path else REPORT_COVER_URL, msg, platform="all")
+            add_sys_notification("request", f"收到新求片: {title}", f"用户 {uname} 提交了新的心愿单", "/requests_admin")
+            season_str = f" 第 {season} 季" if media_type == "tv" else ""
+            msg = f"🎬 <b>收到新求片心愿</b>\n\n👤 <b>用户：</b>{uname}\n📺 <b>内容：</b>{title} ({year}){season_str}\n\n请及时前往后台审批处理。"
+            from app.services.bot_service import bot
+            bot.send_photo("sys_notify", f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else REPORT_COVER_URL, msg, platform="all")
         except: pass
 
         return {"status": "success", "message": "心愿已提交！系统将尽快处理您的请求。"}

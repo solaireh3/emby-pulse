@@ -15,7 +15,6 @@ router = APIRouter()
 # 1. 基础字典 (涵盖常见官方任务与百大主流插件)
 # ==========================================
 COMMON_TASK_DICT = {
-    # --- Emby 官方核心维护任务 ---
     "Scan media library": "扫描媒体库",
     "Refresh Guide": "刷新电视指南",
     "Refresh channels": "刷新直播频道",
@@ -46,7 +45,6 @@ COMMON_TASK_DICT = {
     "Download missing plugin updates": "下载缺失的插件更新",
     "Remove old sync jobs": "移除陈旧的同步任务",
     
-    # --- 影视搜刮器类插件 (Jav / MetaTube / Douban / TMDB / Bangumi) ---
     "Scrape Jav": "JavScraper 搜刮器同步",
     "Update JavScraper Index": "更新 JavScraper 索引",
     "MetaTube: Update Subscriptions": "MetaTube: 更新订阅",
@@ -61,7 +59,6 @@ COMMON_TASK_DICT = {
     "AniDB: Refresh metadata": "AniDB: 刷新动漫元数据",
     "Kitsu: Refresh metadata": "Kitsu: 刷新动漫元数据",
     
-    # --- 字幕与图像获取插件 (Open Subtitles / Fanart / Shooter / Thunder) ---
     "Open Subtitles: Download missing subtitles": "Open Subtitles: 下载缺失字幕",
     "Subscene: Download missing subtitles": "Subscene: 下载缺失字幕",
     "Shooter: Download missing subtitles": "伪射手(Shooter): 下载缺失字幕",
@@ -69,7 +66,6 @@ COMMON_TASK_DICT = {
     "Fanart.tv: Download missing images": "Fanart.tv: 下载缺失的海报与艺术图",
     "Screen Grabber: Extract chapter images": "截屏器: 提取视频章节预览图",
     
-    # --- 高级工具与扩展插件 (Trakt / Intro Skipper / Auto Box Sets) ---
     "Trakt.tv: Sync Library": "Trakt.tv: 同步媒体库",
     "Trakt.tv: Import Playstates": "Trakt.tv: 导入播放状态",
     "Trakt: Sync Library": "Trakt: 同步媒体库",
@@ -80,7 +76,6 @@ COMMON_TASK_DICT = {
     "Theme Songs: Download theme songs": "主题曲: 下载剧集主题曲",
     "Theme Videos: Download theme videos": "主题视频: 下载剧集主题背景视频",
     
-    # --- 统计与通知类插件 (Playback Reporting / Webhooks / Statistics) ---
     "Playback Reporting: Backup database": "播放统计: 备份统计数据库",
     "Playback Reporting: Aggregate Data": "播放统计: 聚合计算历史数据",
     "EmbyStat: Refresh data": "EmbyStat: 刷新统计数据",
@@ -91,14 +86,56 @@ COMMON_TASK_DICT = {
     "Telegram: Send test notification": "Telegram: 发送测试通知",
     "Discord: Send test notification": "Discord: 发送测试通知",
     
-    # --- IPTV 与直播电视源 ---
     "M3U: Refresh guide": "M3U: 刷新直播节目单",
     "XmlTV: Refresh guide": "XmlTV: 刷新直播节目单",
     "HDHomeRun: Refresh guide": "HDHomeRun: 刷新直播节目单"
 }
 
 # ==========================================
-# 🔥 优化：100% 精准的后台守护进程 (依靠时间戳追踪，附带本地时区推送)
+# 🔥 新增：任务通知配置模块
+# ==========================================
+def ensure_task_config_schema():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS task_config (key TEXT PRIMARY KEY, value TEXT)''')
+        c.execute("INSERT OR IGNORE INTO task_config (key, value) VALUES ('enable_notify', '1')")
+        conn.commit()
+        conn.close()
+    except Exception as e: pass
+
+ensure_task_config_schema()
+
+class TaskConfigModel(BaseModel):
+    enable_notify: bool
+
+@router.get("/api/tasks/config")
+async def get_task_config(request: Request):
+    if not request.session.get("user"): return {"status": "error"}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        row = c.execute("SELECT value FROM task_config WHERE key = 'enable_notify'").fetchone()
+        conn.close()
+        return {"status": "success", "enable_notify": row[0] == '1' if row else True}
+    except Exception as e: return {"status": "error"}
+
+@router.post("/api/tasks/config")
+async def set_task_config(data: TaskConfigModel, request: Request):
+    if not request.session.get("user"): return {"status": "error"}
+    try:
+        val = '1' if data.enable_notify else '0'
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO task_config (key, value) VALUES ('enable_notify', ?)", (val,))
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    except Exception as e: return {"status": "error"}
+
+
+# ==========================================
+# 🔥 优化：带开关拦截的后台守护进程
 # ==========================================
 _task_last_end_times = {}
 _poller_initialized = False
@@ -130,26 +167,35 @@ async def poll_emby_tasks():
                             prev_end = _task_last_end_times.get(tid)
                             if prev_end and end_time != prev_end:
                                 
-                                # 🔥 强制将通知时间转换为北京时间 (UTC+8) 显示
-                                now_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+                                # 🔥 检查是否开启了推送开关
+                                notify_enabled = True
+                                try:
+                                    conn = sqlite3.connect(DB_PATH)
+                                    c = conn.cursor()
+                                    row = c.execute("SELECT value FROM task_config WHERE key = 'enable_notify'").fetchone()
+                                    if row and row[0] == '0': notify_enabled = False
+                                    conn.close()
+                                except: pass
 
-                                if status == "Completed":
-                                    try: add_sys_notification("system", f"任务完成: {display_name}", f"Emby 后台作业正常执行完毕", "/tasks")
-                                    except: pass
-                                    try: bot.send_message("sys_notify", f"✅ <b>任务执行完成</b>\n\n📌 <b>任务</b>: {display_name}\n⏱️ <b>时间</b>: {now_str}\n📊 <b>状态</b>: 成功", platform="all")
-                                    except: pass
-                                elif status == "Failed":
-                                    try: add_sys_notification("system", f"任务失败: {display_name}", f"Emby 后台作业执行异常，请检查", "/tasks")
-                                    except: pass
-                                    try: bot.send_message("sys_notify", f"❌ <b>任务执行失败</b>\n\n📌 <b>任务</b>: {display_name}\n⏱️ <b>时间</b>: {now_str}\n⚠️ <b>警告</b>: 运行异常，请前往后台检查 Emby 日志", platform="all")
-                                    except: pass
+                                if notify_enabled:
+                                    now_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+                                    if status == "Completed":
+                                        try: add_sys_notification("system", f"任务完成: {display_name}", f"Emby 后台作业正常执行完毕", "/tasks")
+                                        except: pass
+                                        try: bot.send_message("sys_notify", f"✅ <b>任务执行完成</b>\n\n📌 <b>任务</b>: {display_name}\n⏱️ <b>时间</b>: {now_str}\n📊 <b>状态</b>: 成功", platform="all")
+                                        except: pass
+                                    elif status == "Failed":
+                                        try: add_sys_notification("system", f"任务失败: {display_name}", f"Emby 后台作业执行异常，请检查", "/tasks")
+                                        except: pass
+                                        try: bot.send_message("sys_notify", f"❌ <b>任务执行失败</b>\n\n📌 <b>任务</b>: {display_name}\n⏱️ <b>时间</b>: {now_str}\n⚠️ <b>警告</b>: 运行异常，请前往后台检查 Emby 日志", platform="all")
+                                        except: pass
                         
                         if end_time:
                             _task_last_end_times[tid] = end_time
                             
                 _poller_initialized = True
         except Exception as e: pass
-        await asyncio.sleep(5)  # 缩短至 5 秒轮询，UI显示更丝滑
+        await asyncio.sleep(5)
 
 @router.on_event("startup")
 async def start_task_poller():

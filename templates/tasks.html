@@ -31,6 +31,15 @@
     .mac-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 10px; }
     html.dark .mac-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.15); }
     html.dark .mac-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.3); }
+
+    /* 🔥 优雅的切换开关样式 */
+    .ep-switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+    .ep-switch input { display: none; }
+    .ep-switch .track { width: 36px; height: 20px; background-color: #E5E5EA; border-radius: 9999px; transition: .3s; }
+    html.dark .ep-switch .track { background-color: #38383A; border: 1px solid rgba(255,255,255,0.1); }
+    .ep-switch .thumb { position: absolute; left: 2px; width: 16px; height: 16px; background-color: white; border-radius: 50%; transition: .3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .ep-switch input:checked + .track { background-color: #34C759; border-color: transparent; }
+    .ep-switch input:checked + .track + .thumb { transform: translateX(16px); }
 </style>
 {% endblock %}
 
@@ -52,6 +61,15 @@
         
         <div class="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto relative">
             
+            <div class="flex items-center gap-2 bg-gray-50 hover:bg-gray-100 dark:bg-[#2C2C2E] dark:hover:bg-[#3A3A3C] px-3 py-2 rounded-[14px] border border-gray-200/50 dark:border-white/5 transition-colors shadow-sm shrink-0" title="开启/关闭全局任务状态推送">
+                <span class="text-[12px] font-bold text-gray-600 dark:text-gray-300 hidden sm:inline">任务通知</span>
+                <i class="fa-solid fa-bell text-gray-500 sm:hidden text-xs"></i>
+                <label class="ep-switch m-0">
+                    <input type="checkbox" id="task-notify-switch" onchange="toggleTaskNotify(this.checked)">
+                    <span class="track"></span><span class="thumb"></span>
+                </label>
+            </div>
+
             <div class="relative" id="running-tasks-dropdown-container">
                 <button onclick="toggleRunningDropdown()" id="running-tasks-btn" class="hidden items-center gap-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-4 py-2.5 rounded-[14px] border border-blue-200/50 dark:border-blue-500/20 text-[13px] font-bold transition-all shadow-sm active:scale-95">
                     <span class="relative flex h-2.5 w-2.5">
@@ -128,7 +146,37 @@
     }
 
     async function init() { 
+        loadTaskConfig(); 
         loadTasks(); 
+    }
+
+    // 🔥 加载通知开关配置
+    async function loadTaskConfig() {
+        try {
+            const res = await fetch('/api/tasks/config');
+            const json = await res.json();
+            if(json.status === 'success') {
+                document.getElementById('task-notify-switch').checked = json.enable_notify;
+            }
+        } catch(e) {}
+    }
+
+    // 🔥 切换通知开关配置
+    async function toggleTaskNotify(val) {
+        try {
+            const res = await fetch('/api/tasks/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enable_notify: val})
+            });
+            const json = await res.json();
+            if(json.status !== 'success') {
+                alert('设置失败');
+                document.getElementById('task-notify-switch').checked = !val; 
+            }
+        } catch(e) {
+            document.getElementById('task-notify-switch').checked = !val;
+        }
     }
 
     async function loadTasks(isManualRefresh = false) {
